@@ -10,7 +10,7 @@ from typing import Dict, Tuple, Optional
 def check_password():
     """Returns True if password is correct"""
     def password_entered():
-        if st.session_state["password"] == "AmicusLaw2025":
+        if st.session_state["password"] == "AmicusLaw2026":
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Clear password from memory
         else:
