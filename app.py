@@ -10,7 +10,7 @@ from typing import Dict, Tuple, Optional
 def check_password():
     """Returns True if password is correct"""
     def password_entered():
-        if st.session_state["password"] == "AmicusLaw2025":
+        if st.session_state["password"] == "test":
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Clear password from memory
         else:
@@ -264,26 +264,26 @@ if check_password():
         facts_section = ""
         if facts_paragraph.strip():
             facts_section = f"""
-    
-    **FACTS:**
-    
-    {facts_paragraph}"""
+
+**FACTS:**
+
+{facts_paragraph}"""
         
         report = f"""CAUSE NO. {cause_number}
-    
-    **IN RE:**
-    
-    **{payee_name}**
-    
-    **{courthouse}**
-    
-    **REPORT OF GUARDIAN AD LITEM**
-    
-    This report, as requested by the Court, analyzes the circumstances of the proposed transfer of structured settlement payment rights by and between {payee_name} ("the Payee"), and {factoring_company} ("the Transferee") and the proposed Transferee's compliance with Chapter 141 of the Civil Practice and Remedies Code.
-    
-    **SOURCES CONSULTED:**
-    
-    I received an unredacted copy of the {application_title.title()}, which included as Exhibits: {formatted_exhibits}. {prior_sentence}{facts_section}"""
+
+**IN RE:**
+
+**{payee_name}**
+
+**{courthouse}**
+
+**REPORT OF GUARDIAN AD LITEM**
+
+This report, as requested by the Court, analyzes the circumstances of the proposed transfer of structured settlement payment rights by and between {payee_name} ("the Payee"), and {factoring_company} ("the Transferee") and the proposed Transferee's compliance with Chapter 141 of the Civil Practice and Remedies Code.
+
+**SOURCES CONSULTED:**
+
+I received an unredacted copy of the {application_title.title()}, which included as Exhibits: {formatted_exhibits}. {prior_sentence}{facts_section}"""
         
         return report
     
@@ -410,12 +410,12 @@ if check_password():
         st.subheader("Step 1: Select the number of payment groups")
         st.markdown("*Example 1: if the client is selling 5 payments of \\$7,000 and 2 payments of \\$4,000, you would select '2' because there are two uneven groups.*\n\n*Example 2: if the client is selling 165 payments of \\$500, you would select '1' because it is one large group of equal payments.*")
         num_groups = st.number_input("How many different payment groups are you selling?", min_value=1, value=1, step=1, key="financial_num_groups")
-    
+
         # Collect data for each group
         all_payment_dates = []
         all_payment_amounts = []
         total_aggregate = 0
-    
+
         for group_num in range(num_groups):
             if num_groups > 1:
                 st.write("---")
@@ -425,7 +425,7 @@ if check_password():
             
             st.write(f"**Step {2 + step_offset}: Payment Information - Group {group_num + 1}**")
             num_payments = st.number_input(f"How many payments in group {group_num + 1}?", min_value=1, value=1, step=1, key=f"financial_payments_{group_num}")
-    
+
             # Purchase date selection - only show for the first group
             if group_num == 0:
                 st.write(f"**Step {3 + step_offset}: Purchase Date**")
@@ -447,25 +447,25 @@ if check_password():
                 
                 # Update step numbers for subsequent steps
                 step_offset += 1
-    
+
             if num_payments > 1:
                 st.write(f"**Step {3 + step_offset}: Payment Frequency - Group {group_num + 1}**")
                 payment_frequency = st.radio(f"Are these annual or monthly payments?", ["Monthly", "Annual"], key=f"financial_frequency_{group_num}")
                 is_monthly = payment_frequency == "Monthly"
             else:
                 is_monthly = False
-    
+
             st.write(f"**Step {4 + step_offset}: Payment Amount - Group {group_num + 1}**")
             payment_amount = st.number_input(f"How much is each payment in group {group_num + 1}?", min_value=0.01, value=10000.00, step=100.00, format="%.2f", key=f"financial_amount_{group_num}")
-    
+
             group_aggregate = num_payments * payment_amount
             total_aggregate += group_aggregate
             
             st.write(f"**Group {group_num + 1} aggregate: \\${group_aggregate:,.2f}** ({num_payments}  payments × \\${payment_amount:,.2f} each)")
-    
+
             st.write(f"**Step {5 + step_offset}: Payment Dates - Group {group_num + 1}**")
             first_payment_date = st.date_input(f"When will the first payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=30), min_value=datetime.now().date(), max_value=datetime.now().date() + timedelta(days=365*50), key=f"financial_first_date_{group_num}")
-    
+
             if num_payments > 1:
                 last_payment_date = st.date_input(f"When will the last payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=365), min_value=datetime.now().date(), max_value=datetime.now().date() + timedelta(days=365*50), key=f"financial_last_date_{group_num}")
                 if last_payment_date <= first_payment_date:
@@ -473,12 +473,12 @@ if check_password():
                     st.stop()
             else:
                 last_payment_date = first_payment_date
-    
+
             group_dates, group_amounts = generate_payment_schedule(num_payments, payment_amount, datetime.combine(first_payment_date, datetime.min.time()), datetime.combine(last_payment_date, datetime.min.time()), is_monthly)
             
             all_payment_dates.extend(group_dates)
             all_payment_amounts.extend(group_amounts)
-    
+
         # Overall verification step
         st.write("---")
         st.subheader("⚠️ Overall Verification Step")
@@ -490,9 +490,9 @@ if check_password():
                 amount_group = st.session_state.get(f"financial_amount_{group_num}", 10000.0)
                 group_total = num_payments_group * amount_group
                 st.write(f"• Group {group_num + 1}: {num_payments_group} payments × \\${amount_group:,.2f} = \\${group_total:,.2f}")
-    
+
         aggregate_correct = st.radio("Is this total aggregate amount correct?", ["Select an option", "Yes, this is correct", "No, I need to update my numbers"], key="financial_aggregate_check")
-    
+
         if aggregate_correct == "No, I need to update my numbers":
             st.warning("Please update your numbers above and check again.")
             st.stop()
@@ -501,12 +501,12 @@ if check_password():
             st.stop()
         elif aggregate_correct == "Yes, this is correct":
             st.success("Great! Let's continue with the purchase price.")
-    
+
         # Purchase price
         final_step = 7 if num_groups == 1 else 3 + num_groups * 4
         st.subheader(f"Step {final_step}: Purchase Price")
         purchase_price = st.number_input("How much is the factoring company buying ALL the payments for?", min_value=0.01, value=float(total_aggregate * 0.85), step=100.00, format="%.2f", key="financial_purchase_price")
-    
+
         # Competitor analysis settings
         st.subheader(f"Step {final_step + 1}: Competitor Analysis")
         st.write("For competitor quote calculation, we need to set a target profit to determine competitive pricing.")
@@ -515,7 +515,7 @@ if check_password():
             ["Use $2,500 (default)", "Specify a different target profit"],
             key="financial_target_profit_choice"
         )
-    
+
         if use_default_target_profit == "Use $2,500 (default)":
             target_profit = 2500
             st.write("**Using target profit: $2,500**")
@@ -529,20 +529,20 @@ if check_password():
                 key="financial_custom_target_profit"
             )
             st.write(f"**Using target profit: ${target_profit:,.2f}**")
-    
+
         st.subheader("📊 Results & Analysis")
-    
+
         # Sort all payments by date
         sorted_payment_pairs = sorted(zip(all_payment_dates, all_payment_amounts))
         payment_dates = [pair[0] for pair in sorted_payment_pairs]
         payment_amounts = [pair[1] for pair in sorted_payment_pairs]
-    
+
         # Use the selected purchase date (either today or custom)
         cashflows = [-purchase_price] + payment_amounts
         dates = [purchase_date] + payment_dates
-    
+
         irr_rate = xirr(cashflows, dates)
-    
+
         if irr_rate is not None:
             # Calculate duration
             duration_years = calculate_duration(payment_dates, payment_amounts, purchase_date, irr_rate)
@@ -661,12 +661,12 @@ if check_password():
             with col1:
                 st.write("**💰 Factoring Company**")
                 st.code(f"""
-    Wholesale Price:       ${wholesale_price:,.2f}
-    Less Purchase Price:  -${purchase_price:,.2f}
-    Less Legal Costs:     -$6,000.00
-                          ________________
-    Profit:                ${profit:,.2f}
-                """)
+Wholesale Price:       ${wholesale_price:,.2f}
+Less Purchase Price:  -${purchase_price:,.2f}
+Less Legal Costs:     -$6,000.00
+                      ________________
+Profit:                ${profit:,.2f}
+            """)
                 st.markdown(f"""
                 <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
                     <div style="font-size: 14px; color: #666;">Factoring Company Discount Rate</div>
@@ -678,12 +678,12 @@ if check_password():
                 st.write("**🏢 Competitive Analysis**")
                 competitive_irr_display = f"{competitive_irr:.2%}" if competitive_irr is not None else "N/A"
                 st.code(f"""
-    Wholesale Price:         ${wholesale_price:,.2f}
-    Less Competitive Quote: -${competitor_quote:,.2f}
-    Less Legal Costs:       -$6,000.00
-                          ________________
-    Profit:                ${competitor_profit:,.2f}
-                """)
+Wholesale Price:         ${wholesale_price:,.2f}
+Less Competitive Quote: -${competitor_quote:,.2f}
+Less Legal Costs:       -$6,000.00
+                      ________________
+Profit:                ${competitor_profit:,.2f}
+            """)
                 st.markdown(f"""
                 <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
                     <div style="font-size: 14px; color: #666;">Competitive Quote Discount Rate</div>
@@ -751,38 +751,84 @@ if check_password():
                 
                 st.write("**Financial Calculations:**")
                 st.code(f"""
-    Total Payments: ${total_payments:,.2f}
-    Purchase Price: ${purchase_price:,.2f}
-    Duration: {duration_years:.3f} years
-    Number of Payments: {len(payment_dates)}
-    
-    Treasury Rates Used:
-      Lower Bound ({lower_bound}Y): {lower_rate:.4f} ({lower_rate:.2%})
-      Upper Bound ({upper_bound}Y): {upper_rate:.4f} ({upper_rate:.2%})
-    
-    Excel Discount Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
-    (Formula: ((Duration-{lower_bound})/({upper_bound}-{lower_bound})*({upper_rate:.4f}-{lower_rate:.4f}))+{lower_rate:.4f}+{spread:.3f})
-    
-    Spread Used: {spread:.1%}
-    
-    XNPV Calculation (using actual payment schedule):
-      PV of initial outflow: ${xnpv_initial:,.2f}
-      PV of all payments: ${xnpv_payments:,.2f}
-      XNPV Total: ${xnpv_value:,.2f}
-    
-    Wholesale Price: ${wholesale_price:,.2f} (Purchase Price + XNPV)
-    Competitor Quote: ${competitor_quote:,.2f}
-    Target Profit Used: ${target_profit:,.2f}
-                """)
-    
+Total Payments: ${total_payments:,.2f}
+Purchase Price: ${purchase_price:,.2f}
+Duration: {duration_years:.3f} years
+Number of Payments: {len(payment_dates)}
+
+Treasury Rates Used:
+  Lower Bound ({lower_bound}Y): {lower_rate:.4f} ({lower_rate:.2%})
+  Upper Bound ({upper_bound}Y): {upper_rate:.4f} ({upper_rate:.2%})
+
+Excel Discount Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
+(Formula: ((Duration-{lower_bound})/({upper_bound}-{lower_bound})*({upper_rate:.4f}-{lower_rate:.4f}))+{lower_rate:.4f}+{spread:.3f})
+
+Spread Used: {spread:.1%}
+
+XNPV Calculation (using actual payment schedule):
+  PV of initial outflow: ${xnpv_initial:,.2f}
+  PV of all payments: ${xnpv_payments:,.2f}
+  XNPV Total: ${xnpv_value:,.2f}
+
+Wholesale Price: ${wholesale_price:,.2f} (Purchase Price + XNPV)
+Competitor Quote: ${competitor_quote:,.2f}
+Target Profit Used: ${target_profit:,.2f}
+            """)
+
             # Navigation guidance
             st.write("---")
             st.write("### ✅ Financial Analysis Complete!")
             st.write("Ready to create your Guardian Ad Litem report? Click the **📝 Report Creation** tab above to continue.")
-    
+            
+            # Summary for Claude report generation
+            st.write("---")
+            st.subheader("📊 Summary for Report Generation")
+            st.write("Copy and paste this summary into Claude for report generation:")
+            
+            # Create summary text
+            summary_text = f"Financial Analysis Summary:\n\n"
+            summary_text += f"Purchase Price: ${purchase_price:,.2f}\n"
+            summary_text += f"Total Aggregate: ${total_aggregate:,.2f}\n"
+            summary_text += f"Number of Payment Groups: {num_groups}\n"
+            summary_text += f"Total Number of Payments: {len(payment_dates)}\n"
+            summary_text += f"Purchase Date: {purchase_date.strftime('%m/%d/%Y')}\n\n"
+            summary_text += f"Duration: {duration_years:.2f} years\n"
+            summary_text += f"Treasury Rates Used: {lower_series_info['display_name']} ({lower_rate:.2%}) to {upper_series_info['display_name']} ({upper_rate:.2%})\n"
+            summary_text += f"Spread: {spread:.1%}\n"
+            summary_text += f"Excel Discount Rate: {excel_discount_rate:.2%}\n\n"
+            summary_text += f"IRR (Factoring Company): {irr_rate:.2%}\n"
+            summary_text += f"Wholesale Price: ${wholesale_price:,.2f}\n"
+            summary_text += f"Profit: ${profit:,.2f}\n"
+            summary_text += f"Competitor Quote: ${competitor_quote:,.2f}\n"
+            competitive_irr_text = "N/A" if competitive_irr is None else f"{competitive_irr:.2%}"
+            summary_text += f"Competitive IRR: {competitive_irr_text}\n"
+            summary_text += f"Target Profit Used: ${target_profit:,.2f}\n\n"
+            summary_text += "Payment Details:"
+            
+            # Add payment group details
+            for group_num in range(num_groups):
+                num_payments_group = st.session_state.get(f"financial_payments_{group_num}", 1)
+                amount_group = st.session_state.get(f"financial_amount_{group_num}", 0)
+                first_date_group = st.session_state.get(f"financial_first_date_{group_num}")
+                
+                if num_payments_group == 1:
+                    frequency_text = "lump sum"
+                else:
+                    frequency_group = st.session_state.get(f"financial_frequency_{group_num}", "Monthly")
+                    frequency_text = frequency_group.lower()
+                
+                first_date_str = first_date_group.strftime('%m/%d/%Y') if first_date_group else 'N/A'
+                group_total = num_payments_group * amount_group
+                
+                summary_text += f"""
+Group {group_num + 1}: {num_payments_group} {frequency_text} payment(s) of ${amount_group:,.2f} each, starting {first_date_str} (Total: ${group_total:,.2f})"""
+            
+            # Display in copyable text area
+            st.text_area("Copy this summary:", summary_text, height=300, key="financial_summary_output")
+
         else:
             st.error("Could not calculate XIRR. Please check your inputs.")
-    
+
     with tab2:
         st.header("Report Creation")
         st.write("Complete the following information to generate your Guardian Ad Litem report:")
