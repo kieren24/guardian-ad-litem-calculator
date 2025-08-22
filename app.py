@@ -516,10 +516,6 @@ if check_password():
         # Add several spaces before signature (double-spaced)
         space1 = doc.add_paragraph()
         space1.paragraph_format.line_spacing = 2.0
-        space2 = doc.add_paragraph()
-        space2.paragraph_format.line_spacing = 2.0
-        space3 = doc.add_paragraph()
-        space3.paragraph_format.line_spacing = 2.0
         
         # Create a container paragraph for right-aligned signature table
         container_para = doc.add_paragraph()
