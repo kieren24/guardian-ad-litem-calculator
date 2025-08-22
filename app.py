@@ -355,7 +355,7 @@ if check_password():
             left_cell = table.cell(0, 0)
             left_tc = left_cell._tc
             left_tcPr = left_tc.get_or_add_tcPr()
-            left_tcBorders = parse_xml(r'<w:tcBorders %s><w:right w:val="single" w:sz="12" w:space="0" w:color="000000"/></w:tcBorders>' % nsdecls('w'))
+            left_tcBorders = parse_xml(r'<w:tcBorders %s><w:right w:val="single" w:sz="18" w:space="0" w:color="000000"/></w:tcBorders>' % nsdecls('w'))
             left_tcPr.append(left_tcBorders)
         
         set_table_borders(table)
