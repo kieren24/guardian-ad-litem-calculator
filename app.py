@@ -5,12 +5,20 @@ import numpy as np
 from scipy.optimize import newton
 import calendar
 from typing import Dict, Tuple, Optional
+import io
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.shared import OxmlElement, qn
+from docx.oxml.ns import nsdecls
+from docx.oxml import parse_xml
 
 # Password protection - ADD THIS AT THE TOP
 def check_password():
     """Returns True if password is correct"""
     def password_entered():
-        if st.session_state["password"] == "test":
+        if st.session_state["password"] == "AmicusLaw2025":
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Clear password from memory
         else:
@@ -237,161 +245,375 @@ if check_password():
         
         amounts = [payment_amount] * num_payments
         return dates, amounts
-    
-    
+
     # ==========================================
-    # REPORT GENERATION FUNCTIONS
-    # (WORK ON THIS SECTION FOR REPORT FEATURES)
+    # WORD DOCUMENT GENERATION FUNCTIONS
+    # (RESTORED FROM OLD CODE)
     # ==========================================
-    
-    def get_report_template_options():
-        """
-        Return the available report template options
-        """
-        return [
-            "Libertarian Approach - Recommend", 
-            "Beginning Slippery Slope - Hesitantly Recommend", 
-            "Negative - Do Not Recommend", 
-            "Life-Contingent Payments - Never Recommend"
-        ]
-    
-    def generate_libertarian_approach_report(cause_number, factoring_company, courthouse, payee_name, application_title, formatted_exhibits, prior_sentence, facts_paragraph=""):
-        """
-        Generate the 'Libertarian Approach - Recommend' template report
-        This is the original template that was already built
-        """
-        # Build the facts section if provided
-        facts_section = ""
-        if facts_paragraph.strip():
-            facts_section = f"""
 
-**FACTS:**
-
-{facts_paragraph}"""
+    def format_title_case_with_ordinals(text):
+        """
+        Format text to proper title case with special handling for ordinals and small words
+        """
+        if not text:
+            return text
         
-        report = f"""CAUSE NO. {cause_number}
-
-**IN RE:**
-
-**{payee_name}**
-
-**{courthouse}**
-
-**REPORT OF GUARDIAN AD LITEM**
-
-This report, as requested by the Court, analyzes the circumstances of the proposed transfer of structured settlement payment rights by and between {payee_name} ("the Payee"), and {factoring_company} ("the Transferee") and the proposed Transferee's compliance with Chapter 141 of the Civil Practice and Remedies Code.
-
-**SOURCES CONSULTED:**
-
-I received an unredacted copy of the {application_title.title()}, which included as Exhibits: {formatted_exhibits}. {prior_sentence}{facts_section}"""
+        # Define words that should remain lowercase (except when first word)
+        small_words = {
+            'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 
+            'on', 'or', 'so', 'the', 'to', 'up', 'yet', 'with', 'from', 'into', 
+            'onto', 'per', 'upon', 'via'
+        }
         
-        return report
-    
-    def generate_paragraph_2_from_financial_data():
-        """
-        Generate paragraph 2 using financial data from session state
-        Handles both single payment and multi-group scenarios
-        """
-        if not st.session_state.get('financial_complete', False):
-            return ""
+        # Define ordinal patterns and their replacements
+        ordinal_replacements = {
+            '1st': '1ˢᵗ',
+            '2nd': '2ⁿᵈ', 
+            '3rd': '3ʳᵈ',
+            '4th': '4ᵗʰ',
+            '5th': '5ᵗʰ',
+            '6th': '6ᵗʰ',
+            '7th': '7ᵗʰ',
+            '8th': '8ᵗʰ',
+            '9th': '9ᵗʰ',
+            '10th': '10ᵗʰ'
+        }
         
-        num_groups = st.session_state.get('num_groups', 1)
-        total_aggregate = st.session_state.get('total_aggregate', 0)
-        purchase_price = st.session_state.get('purchase_price', 0)
+        words = text.split()
+        formatted_words = []
         
-        # Single payment scenario
-        if num_groups == 1:
-            # Get the single payment date
-            all_payment_dates = st.session_state.get('all_payment_dates', [])
-            if all_payment_dates:
-                first_payment_date = all_payment_dates[0].strftime('%B %d, %Y')
-                return f"The Payee is seeking to sell a lump sum payment in the amount of ${total_aggregate:,.2f} due on {first_payment_date} in exchange for a present lump sum payment of ${purchase_price:,.2f}."
-            else:
-                return f"The Payee is seeking to sell a lump sum payment in the amount of ${total_aggregate:,.2f} in exchange for a present lump sum payment of ${purchase_price:,.2f}."
-        
-        # Multi-group scenario
-        else:
-            payment_descriptions = []
-            total_payments = 0
+        for i, word in enumerate(words):
+            # Remove punctuation for processing but remember it
+            clean_word = word.strip('.,!?;:()[]{}"\'-')
+            punctuation = word[len(clean_word):] if len(word) > len(clean_word) else ''
             
-            for group_num in range(num_groups):
-                # Get group data from session state
-                num_payments = st.session_state.get(f"financial_payments_{group_num}", 1)
-                payment_amount = st.session_state.get(f"financial_amount_{group_num}", 0)
-                
-                # Get frequency
-                if num_payments > 1:
-                    frequency = st.session_state.get(f"financial_frequency_{group_num}", "Monthly")
-                    frequency_text = frequency.lower()
-                else:
-                    frequency_text = "lump sum"
-                
-                # Get dates
-                first_date = st.session_state.get(f"financial_first_date_{group_num}")
-                last_date = st.session_state.get(f"financial_last_date_{group_num}")
-                
-                if first_date and last_date:
-                    first_date_str = first_date.strftime('%B %d, %Y')
-                    last_date_str = last_date.strftime('%B %d, %Y')
-                    
-                    if num_payments == 1:
-                        description = f"a lump sum payment of ${payment_amount:,.2f} due on {first_date_str}"
-                    elif first_date == last_date:
-                        description = f"{num_payments} {frequency_text} payments of ${payment_amount:,.2f} each due on {first_date_str}"
-                    else:
-                        description = f"{num_payments} {frequency_text} payments of ${payment_amount:,.2f} each beginning on {first_date_str} and continuing through {last_date_str}"
-                    
-                    payment_descriptions.append(description)
-                    total_payments += num_payments
+            # Check for ordinals first
+            ordinal_found = False
+            for ordinal, replacement in ordinal_replacements.items():
+                if clean_word.lower() == ordinal.lower():
+                    formatted_words.append(replacement + punctuation)
+                    ordinal_found = True
+                    break
             
-            # Combine descriptions with proper grammar
-            if len(payment_descriptions) == 1:
-                combined_descriptions = payment_descriptions[0]
-            elif len(payment_descriptions) == 2:
-                combined_descriptions = f"{payment_descriptions[0]} and {payment_descriptions[1]}"
-            else:
-                combined_descriptions = "; ".join(payment_descriptions[:-1]) + f"; and {payment_descriptions[-1]}"
+            if not ordinal_found:
+                # Apply title case rules
+                if i == 0:  # First word is always capitalized
+                    formatted_words.append(clean_word.capitalize() + punctuation)
+                elif clean_word.lower() in small_words:
+                    formatted_words.append(clean_word.lower() + punctuation)
+                else:
+                    formatted_words.append(clean_word.capitalize() + punctuation)
+        
+        return ' '.join(formatted_words)
+
+    def create_tombs_maxwell_template(cause_number, factoring_company, courthouse, 
+                                    report_title, sources_consulted, facts_section, 
+                                    valuation_section):
+        """
+        Create Word document using the Tombs Maxwell template structure
+        """
+        doc = Document()
+        
+        # Set document margins
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Inches(1)
+            section.bottom_margin = Inches(1)
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
+        
+        # Set default font for the document
+        style = doc.styles['Normal']
+        font = style.font
+        font.name = 'Book Antiqua'
+        font.size = Pt(12)
+        
+        # Add cause number (bold, centered, uppercase, double-spaced)
+        cause_para = doc.add_paragraph()
+        cause_run = cause_para.add_run(f'CAUSE NO. {cause_number.upper()}')
+        cause_run.bold = True
+        cause_run.font.name = 'Book Antiqua'
+        cause_run.font.size = Pt(12)
+        cause_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cause_para.paragraph_format.line_spacing = 2.0  # Double spacing
+        
+        # Create IN RE table structure (2x1 table with thick center border)
+        table = doc.add_table(rows=1, cols=2)
+        
+        # Remove all borders first, then add THINNER center border
+        def set_table_borders(table):
+            # Remove all borders first
+            tbl = table._tbl
+            for cell in table._cells:
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.first_child_found_in("w:tcBorders")
+                if tcBorders is not None:
+                    tcPr.remove(tcBorders)
             
-            return f"The Payee is seeking to sell {combined_descriptions}. These {total_payments} payments aggregate to an amount of ${total_aggregate:,.2f}. In exchange, it is proposed that the Payee receive a single lump-sum payment of ${purchase_price:,.2f}."
-    
-    def format_exhibits_list(exhibits):
-        """
-        Format the exhibits list with proper articles (a/an) and conjunctions
-        Converts all exhibits to title case for proper formatting
-        """
-        if not exhibits:
-            return ""
+            # Add THINNER center vertical border (sz="18" was at "24")
+            left_cell = table.cell(0, 0)
+            left_tc = left_cell._tc
+            left_tcPr = left_tc.get_or_add_tcPr()
+            left_tcBorders = parse_xml(r'<w:tcBorders %s><w:right w:val="single" w:sz="12" w:space="0" w:color="000000"/></w:tcBorders>' % nsdecls('w'))
+            left_tcPr.append(left_tcBorders)
         
-        if len(exhibits) == 1:
-            exhibit = exhibits[0].strip().title()
-            if exhibit.lower()[0] in 'aeiou':
-                return f"an {exhibit}"
-            else:
-                return f"a {exhibit}"
+        set_table_borders(table)
+        table.style = None
         
-        formatted_exhibits = []
-        for i, exhibit in enumerate(exhibits):
-            exhibit = exhibit.strip().title()
-            if not exhibit:
-                continue
-                
-            if i == len(exhibits) - 1:  # Last exhibit
-                if exhibit.lower()[0] in 'aeiou':
-                    formatted_exhibits.append(f"and an {exhibit}")
-                else:
-                    formatted_exhibits.append(f"and a {exhibit}")
-            else:
-                if exhibit.lower()[0] in 'aeiou':
-                    formatted_exhibits.append(f"an {exhibit}")
-                else:
-                    formatted_exhibits.append(f"a {exhibit}")
+        # Left cell - IN RE: and factoring company (single-spaced with line breaks)
+        in_re_cell = table.cell(0, 0)
+        in_re_para = in_re_cell.paragraphs[0]
+        in_re_para.clear()
         
-        if len(formatted_exhibits) == 1:
-            return formatted_exhibits[0]
-        else:
-            return "; ".join(formatted_exhibits[:-1]) + "; " + formatted_exhibits[-1]
-    
-    
+        # Add "IN RE:" on first line
+        in_re_run = in_re_para.add_run('IN RE:')
+        in_re_run.bold = True
+        in_re_run.font.name = 'Book Antiqua'
+        in_re_run.font.size = Pt(12)
+        
+        # Add two line breaks and then factoring company
+        in_re_para.add_run('\n\n\n')  # Skip 2 lines (3 \n total)
+        
+        company_run = in_re_para.add_run(factoring_company.upper())  # Convert to uppercase
+        company_run.bold = True
+        company_run.font.name = 'Book Antiqua'
+        company_run.font.size = Pt(12)
+        
+        in_re_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        in_re_para.paragraph_format.line_spacing = 1.0  # Single spacing
+        
+        # Right cell - courthouse (double-spaced, LEFT JUSTIFIED with left margin indent)
+        courthouse_cell = table.cell(0, 1)
+        courthouse_para = courthouse_cell.paragraphs[0]
+        courthouse_para.clear()
+        
+        # Add courthouse text
+        courthouse_run = courthouse_para.add_run(courthouse.upper())  # Convert to uppercase
+        courthouse_run.bold = True
+        courthouse_run.font.name = 'Book Antiqua'
+        courthouse_run.font.size = Pt(12)
+        courthouse_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        courthouse_para.paragraph_format.line_spacing = 2.0  # Double spacing
+        courthouse_para.paragraph_format.left_indent = Inches(0.35)  # Indent whole block 5 spaces
+        
+        # Add ONE space after table before REPORT OF GUARDIAN AD LITEM (remove space after)
+        space_para = doc.add_paragraph()
+        space_para.paragraph_format.line_spacing = 2.0
+        space_para.paragraph_format.space_after = Pt(0)  # Remove space after paragraph
+        
+        # Add main heading with underline (double-spaced) - NO EXTRA SPACE BEFORE
+        heading_para = doc.add_paragraph()
+        heading_run = heading_para.add_run('REPORT OF GUARDIAN AD LITEM')
+        heading_run.bold = True  # Only this heading should be bold
+        heading_run.underline = True
+        heading_run.font.name = 'Book Antiqua'
+        heading_run.font.size = Pt(12)
+        heading_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        heading_para.paragraph_format.line_spacing = 2.0
+        
+        # Add report title section (if provided)
+        if report_title.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_title = report_title.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            title_paragraphs = cleaned_title.split('\n\n')
+            for title_para in title_paragraphs:
+                if title_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(title_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add SOURCES CONSULTED section (double-spaced, NOT BOLD, INDENTED)
+        sources_heading = doc.add_paragraph()
+        sources_run = sources_heading.add_run('SOURCES CONSULTED:')
+        sources_run.bold = False  # Remove bold
+        sources_run.underline = True
+        sources_run.font.name = 'Book Antiqua'
+        sources_run.font.size = Pt(12)
+        sources_heading.paragraph_format.line_spacing = 2.0
+        sources_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        sources_heading.paragraph_format.first_line_indent = Inches(0.5)  # Indent
+        
+        # Add sources paragraph (double-spaced, justified)
+        if sources_consulted.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_sources = sources_consulted.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            sources_paragraphs = cleaned_sources.split('\n\n')
+            for source_para in sources_paragraphs:
+                if source_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(source_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add FACTS section (double-spaced, NOT BOLD, INDENTED)
+        facts_heading = doc.add_paragraph()
+        facts_run = facts_heading.add_run('FACTS:')
+        facts_run.bold = False  # Remove bold
+        facts_run.underline = True
+        facts_run.font.name = 'Book Antiqua'
+        facts_run.font.size = Pt(12)
+        facts_heading.paragraph_format.line_spacing = 2.0
+        facts_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        facts_heading.paragraph_format.first_line_indent = Inches(0.5)  # Indent
+        
+        # Add facts paragraphs with indentation, double spacing, and justification
+        if facts_section.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_facts = facts_section.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            fact_paragraphs = cleaned_facts.split('\n\n')
+            for fact_para in fact_paragraphs:
+                if fact_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(fact_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add VALUATION and RECOMMENDATION section (double-spaced, NOT BOLD, INDENTED)
+        valuation_heading = doc.add_paragraph()
+        valuation_run = valuation_heading.add_run('VALUATION and RECOMMENDATION:')
+        valuation_run.bold = False  # Remove bold
+        valuation_run.underline = True
+        valuation_run.font.name = 'Book Antiqua'
+        valuation_run.font.size = Pt(12)
+        valuation_heading.paragraph_format.line_spacing = 2.0
+        valuation_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        valuation_heading.paragraph_format.first_line_indent = Inches(0.5)  # Indent
+        
+        # Add valuation paragraphs (double-spaced, justified)
+        if valuation_section.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_valuation = valuation_section.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            val_paragraphs = cleaned_valuation.split('\n\n')
+            for val_para in val_paragraphs:
+                if val_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(val_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add several spaces before signature (double-spaced)
+        space1 = doc.add_paragraph()
+        space1.paragraph_format.line_spacing = 2.0
+        space2 = doc.add_paragraph()
+        space2.paragraph_format.line_spacing = 2.0
+        space3 = doc.add_paragraph()
+        space3.paragraph_format.line_spacing = 2.0
+        
+        # Create a container paragraph for right-aligned signature table
+        container_para = doc.add_paragraph()
+        container_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        
+        # Add signature block table (no borders, positioned on right side, WIDER)
+        sig_table = doc.add_table(rows=3, cols=1)
+        
+        # Remove all borders from signature table
+        def remove_all_table_borders(table):
+            tbl = table._tbl
+            for cell in table._cells:
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.first_child_found_in("w:tcBorders")
+                if tcBorders is not None:
+                    tcPr.remove(tcBorders)
+        
+        remove_all_table_borders(sig_table)
+        sig_table.style = None
+        
+        # Position table to the right
+        sig_table.alignment = WD_TABLE_ALIGNMENT.RIGHT
+        
+        # Set table width WIDER to accommodate email address
+        sig_table.autofit = False
+        for column in sig_table.columns:
+            column.width = Inches(4.5)  # Increased from 3.5 to 4.5 inches for email
+        
+        # Move table to right by setting table properties
+        tbl = sig_table._tbl
+        tblPr = tbl.tblPr
+        # Add table positioning with wider width
+        tbl_pos = parse_xml(r'<w:tblW %s w:w="3240" w:type="dxa"/>' % nsdecls('w'))  # Increased width
+        tblPr.append(tbl_pos)
+        
+        # Add table justification to right
+        tbl_jc = parse_xml(r'<w:jc %s w:val="right"/>' % nsdecls('w'))
+        tblPr.append(tbl_jc)
+        
+        # First row - "Respectfully submitted" and signature (single-spaced for signature block)
+        first_row = sig_table.cell(0, 0)
+        first_para = first_row.paragraphs[0]
+        first_para.clear()
+        
+        # Add "Respectfully submitted," 
+        resp_run = first_para.add_run("Respectfully submitted,")
+        resp_run.font.name = 'Book Antiqua'
+        resp_run.font.size = Pt(12)
+        first_para.paragraph_format.line_spacing = 1.0
+        first_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        
+        # Add THREE line breaks (one more single spaced line)
+        first_para.add_run("\n\n\n")
+        
+        # Add signature with underline (NO space after - ensure no trailing space)
+        sig_run = first_para.add_run("/s/ Joseph W. Tombs")
+        sig_run.font.name = 'Book Antiqua'
+        sig_run.font.size = Pt(12)
+        sig_run.underline = True
+        
+        # Explicitly set space after paragraph to 0 to remove any trailing space
+        first_para.paragraph_format.space_after = Pt(0)
+        
+        # Second row - empty for spacing
+        empty_row = sig_table.cell(1, 0)
+        empty_row.paragraphs[0].paragraph_format.line_spacing = 1.0
+        
+        # Third row - contact information (single-spaced for signature block)
+        contact_cell = sig_table.cell(2, 0)
+        contact_para = contact_cell.paragraphs[0]
+        contact_para.clear()
+        
+        contact_text = """Joseph W. Tombs
+TOMBS MAXWELL, LLP
+State Bar No. 20116250
+7021 Kewanee Ave. 7-102
+Lubbock, TX 79424
+Office (806) 698-1122
+Tombs@tombsmaxwell.com"""
+        
+        contact_run = contact_para.add_run(contact_text)
+        contact_run.font.name = 'Book Antiqua'
+        contact_run.font.size = Pt(12)
+        contact_para.paragraph_format.line_spacing = 1.0
+        contact_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        
+        # Save to BytesIO object
+        doc_io = io.BytesIO()
+        doc.save(doc_io)
+        doc_io.seek(0)
+        
+        return doc_io
+
     # ==========================================
     # STREAMLIT APP INTERFACE
     # (MAIN APP STRUCTURE - SAFE TO MODIFY LAYOUT)
@@ -405,6 +627,38 @@ I received an unredacted copy of the {application_title.title()}, which included
     
     with tab1:
         st.header("Financial Analysis")
+        
+        # NEW: Lindsey Quote Section - ADDED AT THE BEGINNING
+        st.subheader("📧 Get Quote from Lindsey")
+        st.info("Before starting, email Lindsey at **lindsey@amicustrustcompany.com** to request a quote for this case.")
+        
+        # Create two columns for the quote inputs
+        col1, col2 = st.columns(2)
+        with col1:
+            lindsey_quote = st.number_input(
+                "Lindsey's Quote Amount ($):", 
+                min_value=0.0, 
+                value=0.0, 
+                step=100.0, 
+                format="%.2f",
+                key="lindsey_quote_amount"
+            )
+        with col2:
+            lindsey_irr = st.number_input(
+                "Lindsey's IRR (%):", 
+                min_value=0.0, 
+                max_value=100.0, 
+                value=0.0, 
+                step=0.01, 
+                format="%.2f",
+                key="lindsey_irr_percent"
+            )
+        
+        # Store Lindsey's data in session state
+        st.session_state['lindsey_quote'] = lindsey_quote
+        st.session_state['lindsey_irr'] = lindsey_irr / 100.0 if lindsey_irr > 0 else 0.0
+        
+        st.write("---")  # Separator line
         
         # Step 1: Number of payment groups
         st.subheader("Step 1: Select the number of payment groups")
@@ -661,12 +915,12 @@ I received an unredacted copy of the {application_title.title()}, which included
             with col1:
                 st.write("**💰 Factoring Company**")
                 st.code(f"""
-Wholesale Price:       ${wholesale_price:,.2f}
-Less Purchase Price:  -${purchase_price:,.2f}
-Less Legal Costs:     -$6,000.00
-                      ________________
-Profit:                ${profit:,.2f}
-            """)
+    Wholesale Price:       ${wholesale_price:,.2f}
+    Less Purchase Price:  -${purchase_price:,.2f}
+    Less Legal Costs:     -$6,000.00
+                          ________________
+    Profit:                ${profit:,.2f}
+                """)
                 st.markdown(f"""
                 <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
                     <div style="font-size: 14px; color: #666;">Factoring Company Discount Rate</div>
@@ -678,12 +932,12 @@ Profit:                ${profit:,.2f}
                 st.write("**🏢 Competitive Analysis**")
                 competitive_irr_display = f"{competitive_irr:.2%}" if competitive_irr is not None else "N/A"
                 st.code(f"""
-Wholesale Price:         ${wholesale_price:,.2f}
-Less Competitive Quote: -${competitor_quote:,.2f}
-Less Legal Costs:       -$6,000.00
-                      ________________
-Profit:                ${competitor_profit:,.2f}
-            """)
+    Wholesale Price:         ${wholesale_price:,.2f}
+    Less Competitive Quote: -${competitor_quote:,.2f}
+    Less Legal Costs:       -$6,000.00
+                          ________________
+    Profit:                ${competitor_profit:,.2f}
+                """)
                 st.markdown(f"""
                 <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
                     <div style="font-size: 14px; color: #666;">Competitive Quote Discount Rate</div>
@@ -707,7 +961,7 @@ Profit:                ${competitor_profit:,.2f}
             st.session_state['all_payment_dates'] = all_payment_dates
             st.session_state['all_payment_amounts'] = all_payment_amounts
             
-            # Detailed calculations (expandable)
+            # Detailed calculations (expandable) - MODIFIED TO INCLUDE LINDSEY'S DATA
             with st.expander("🔬 Detailed Calculations"):
                 st.write("**Duration Calculation Details:**")
                 duration_details = []
@@ -749,204 +1003,239 @@ Profit:                ${competitor_profit:,.2f}
                 
                 xnpv_value = xnpv_initial + xnpv_payments
                 
+                # MODIFIED: Financial Calculations section now includes Lindsey's data
                 st.write("**Financial Calculations:**")
+                lindsey_quote_display = f"${st.session_state.get('lindsey_quote', 0):,.2f}" if st.session_state.get('lindsey_quote', 0) > 0 else "Not provided"
+                lindsey_irr_display = f"{st.session_state.get('lindsey_irr', 0):.2%}" if st.session_state.get('lindsey_irr', 0) > 0 else "Not provided"
+                
                 st.code(f"""
-Total Payments: ${total_payments:,.2f}
-Purchase Price: ${purchase_price:,.2f}
-Duration: {duration_years:.3f} years
-Number of Payments: {len(payment_dates)}
-
-Treasury Rates Used:
-  Lower Bound ({lower_bound}Y): {lower_rate:.4f} ({lower_rate:.2%})
-  Upper Bound ({upper_bound}Y): {upper_rate:.4f} ({upper_rate:.2%})
-
-Excel Discount Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
-(Formula: ((Duration-{lower_bound})/({upper_bound}-{lower_bound})*({upper_rate:.4f}-{lower_rate:.4f}))+{lower_rate:.4f}+{spread:.3f})
-
-Spread Used: {spread:.1%}
-
-XNPV Calculation (using actual payment schedule):
-  PV of initial outflow: ${xnpv_initial:,.2f}
-  PV of all payments: ${xnpv_payments:,.2f}
-  XNPV Total: ${xnpv_value:,.2f}
-
-Wholesale Price: ${wholesale_price:,.2f} (Purchase Price + XNPV)
-Competitor Quote: ${competitor_quote:,.2f}
-Target Profit Used: ${target_profit:,.2f}
-            """)
+    === LINDSEY'S QUOTE ===
+    Lindsey's Quote Amount: {lindsey_quote_display}
+    Lindsey's IRR: {lindsey_irr_display}
+    
+    === CALCULATED VALUES ===
+    Total Payments: ${total_payments:,.2f}
+    Purchase Price: ${purchase_price:,.2f}
+    Duration: {duration_years:.3f} years
+    Number of Payments: {len(payment_dates)}
+    
+    Treasury Rates Used:
+      Lower Bound ({lower_bound}Y): {lower_rate:.4f} ({lower_rate:.2%})
+      Upper Bound ({upper_bound}Y): {upper_rate:.4f} ({upper_rate:.2%})
+    
+    Excel Discount Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
+    (Formula: ((Duration-{lower_bound})/({upper_bound}-{lower_bound})*({upper_rate:.4f}-{lower_rate:.4f}))+{lower_rate:.4f}+{spread:.3f})
+    
+    Spread Used: {spread:.1%}
+    
+    XNPV Calculation (using actual payment schedule):
+      PV of initial outflow: ${xnpv_initial:,.2f}
+      PV of all payments: ${xnpv_payments:,.2f}
+      XNPV Total: ${xnpv_value:,.2f}
+    
+    Wholesale Price: ${wholesale_price:,.2f} (Purchase Price + XNPV)
+    Competitor Quote: ${competitor_quote:,.2f}
+    Target Profit Used: ${target_profit:,.2f}
+                """)
 
             # Navigation guidance
             st.write("---")
             st.write("### ✅ Financial Analysis Complete!")
             st.write("Ready to create your Guardian Ad Litem report? Click the **📝 Report Creation** tab above to continue.")
-            
-            # Summary for Claude report generation
-            st.write("---")
-            st.subheader("📊 Summary for Report Generation")
-            st.write("Copy and paste this summary into Claude for report generation:")
-            
-            # Create summary text
-            summary_text = f"Financial Analysis Summary:\n\n"
-            summary_text += f"[factoring_company_present_lump_sum_offer]: ${purchase_price:,.2f}\n"
-            summary_text += f"[factoring_company_discount_rate_irr]: {irr_rate:.2%}\n"
-            summary_text += f"[factoring_company_profit]: ${profit:,.2f}\n\n"
-            summary_text += f"[wholesale_purchase_price]: ${wholesale_price:,.2f}\n"
-            summary_text += f"[wholesale_discount_rate]: ${excel_discount_rate:,.2f}\n\n"
-            summary_text += f"[competitive_bid]: ${competitor_quote:,.2f}\n"
-            competitive_irr_text = "N/A" if competitive_irr is None else f"{competitive_irr:.2%}"
-            summary_text += f"[competitive_bid_discount_rate_irr]: {competitive_irr_text}\n"
-            summary_text += f"[competitor_profit]: ${competitor_profit:,.2f}\n\n"
-            summary_text += "Payment Details:"
-            
-            # Add payment group details
-            for group_num in range(num_groups):
-                num_payments_group = st.session_state.get(f"financial_payments_{group_num}", 1)
-                amount_group = st.session_state.get(f"financial_amount_{group_num}", 0)
-                first_date_group = st.session_state.get(f"financial_first_date_{group_num}")
-                
-                if num_payments_group == 1:
-                    frequency_text = "lump sum"
-                else:
-                    frequency_group = st.session_state.get(f"financial_frequency_{group_num}", "Monthly")
-                    frequency_text = frequency_group.lower()
-                
-                first_date_str = first_date_group.strftime('%m/%d/%Y') if first_date_group else 'N/A'
-                group_total = num_payments_group * amount_group
-                
-                summary_text += f"""
-Group {group_num + 1}: {num_payments_group} {frequency_text} payment(s) of ${amount_group:,.2f} each, starting {first_date_str} (Total: ${group_total:,.2f})"""
-            
-            # Display in copyable text area
-            st.text_area("Copy this summary:", summary_text, height=300, key="financial_summary_output")
 
         else:
             st.error("Could not calculate XIRR. Please check your inputs.")
 
+    # UPDATED TAB 2 - Report Creation (combines new simplified input with old perfect formatting)
     with tab2:
-        st.header("Report Creation")
-        st.write("Complete the following information to generate your Guardian Ad Litem report:")
+        st.header("Report Formatting Tool")
+        st.write("Use this tool to format your AI-generated Guardian Ad Litem report into a properly formatted Word document.")
         
         # Check if financial analysis is complete
         if not st.session_state.get('financial_complete', False):
-            st.warning("⚠️ Please complete the **💰 Financial Analysis** tab first to auto-populate payment details.")
+            st.warning("⚠️ Please complete the **💰 Financial Analysis** tab first.")
             st.info("👈 Click the **Financial Analysis** tab to get started!")
-            st.stop()
         
-        # Template selection
-        st.subheader("Template Selection")
-        template_options = get_report_template_options()
-        selected_template = st.selectbox(
-            "Which report template would you like to use?", 
-            template_options,
-            index=0  # Default to "Libertarian Approach - Recommend"
+        st.write("---")
+        
+        # STEP 1: Basic case information (reduced to 3 questions)
+        st.subheader("Step 1: Basic Case Information")
+        
+        cause_number = st.text_input(
+            "What is the cause number?", 
+            value="", 
+            key="report_cause_number",
+            help="Example: CC-2024-CV-0656"
         )
-        st.write(f"**Selected template:** {selected_template}")
         
-        # Basic case information
-        st.subheader("Case Information")
-        cause_number = st.text_input("What is the cause number?", value="", key="report_cause_number")
-        factoring_company = st.text_input("What is the factoring company's name on the application?", value="", key="report_factoring_company")
-        courthouse = st.text_input("What is the court, number, county, state on the application?", value="", key="report_courthouse")
-        payee_name = st.text_input("What is the Payee name on the application?", value="", key="report_payee_name")
-        application_title = st.text_input("What is the title of the application?", value="", key="report_application_title")
+        factoring_company = st.text_input(
+            "What is the factoring company's name on the application?", 
+            value="", 
+            key="report_factoring_company",
+            help="Example: J.G. WENTWORTH ORIGINATIONS, LLC"
+        )
         
-        # Exhibits section
-        st.subheader("Exhibits")
-        num_exhibits = st.number_input("How many exhibits were in the application?", min_value=1, value=1, step=1, key="report_num_exhibits")
+        courthouse = st.text_input(
+            "What is the court, number, county, state on the application?", 
+            value="", 
+            key="report_courthouse",
+            help="Example: IN THE COUNTY COURT AT LAW NUMBER THREE (3) OF LUBBOCK COUNTY, TEXAS"
+        )
         
-        exhibits = []
-        for i in range(num_exhibits):
-            exhibit = st.text_input(f"Exhibit {i+1} - Copy/paste the exact name:", key=f"report_exhibit_{i}", value="")
-            if exhibit.strip():
-                exhibits.append(exhibit.strip())
+        st.write("---")
         
-        # Prior appointments section
-        st.subheader("Prior Appointments")
-        prior_appointment = st.radio("Have we been appointed guardian ad litem for this client before?", ["No", "Yes"], key="report_prior_appointment")
+        # STEP 2: Report sections (paste AI-generated content)
+        st.subheader("Step 2: Paste Report Content")
+        st.info("📝 Copy and paste each section from your AI-generated report below. The formatting will be preserved exactly as you paste it.")
         
-        prior_times = 0
-        if prior_appointment == "Yes":
-            prior_times = st.number_input("How many times before?", min_value=1, value=1, step=1, key="report_prior_times")
+        # Report title section
+        report_title = st.text_area(
+            "Report of Guardian Ad Litem",
+            height=100,
+            placeholder="Paste the introductory paragraph here...",
+            key="report_title_section",
+            help="This is the paragraph right below Report of Guardian Ad Litem"
+        )
         
-        # Facts section - NEW for Libertarian template
-        if selected_template == "Libertarian Approach - Recommend":
-            st.subheader("Facts Section")
-            
-            # Paragraph 1 - Simple copy/paste from Nick's call
-            st.write("**Paragraph 1 - Client Phone Call Notes:**")
-            st.write("Copy and paste what Nick found in his call with the client:")
-            
-            paragraph_1 = st.text_area(
-                "Paragraph 1 content:",
-                height=120,
-                placeholder="Paste Nick's notes about the phone call with the client here...",
-                key="report_paragraph_1"
-            )
-            
-            # Paragraph 2 - Auto-generated from financial data
-            st.write("**Paragraph 2 - Payment Details (Auto-Generated):**")
-            
-            # Generate paragraph 2 from financial data
-            paragraph_2 = generate_paragraph_2_from_financial_data()
-            
-            if paragraph_2:
-                st.success("Generated from your Financial Analysis data:")
-                st.write(paragraph_2)
+        # Sources Consulted section
+        sources_consulted = st.text_area(
+            "SOURCES CONSULTED:",
+            height=150,
+            placeholder="Paste the entire SOURCES CONSULTED section here...",
+            key="report_sources_section",
+            help="This section describes what documents were reviewed"
+        )
+        
+        # Facts section
+        facts_section = st.text_area(
+            "FACTS:",
+            height=200,
+            placeholder="Paste the entire FACTS section here...",
+            key="report_facts_section",
+            help="This section contains the background and payment details"
+        )
+        
+        # Valuation and Recommendation section
+        valuation_section = st.text_area(
+            "VALUATION and RECOMMENDATION:",
+            height=200,
+            placeholder="Paste the entire VALUATION and RECOMMENDATION section here...",
+            key="report_valuation_section",
+            help="This section contains the analysis and final recommendation"
+        )
+        
+        st.write("---")
+        
+        # STEP 3: Generate formatted report
+        st.subheader("Step 3: Generate Formatted Report")
+        
+        if st.button("Generate Formatted Report", key="format_report_button"):
+            # Check that all required fields are filled
+            if not all([cause_number, factoring_company, courthouse, report_title, sources_consulted, facts_section, valuation_section]):
+                st.error("❌ Please fill in all required fields before generating the report.")
             else:
-                st.warning("No financial data found. Please complete Financial Analysis first.")
-                paragraph_2 = ""
-            
-            # Combine paragraphs for final facts section
-            final_facts_paragraph = ""
-            if paragraph_1.strip():
-                final_facts_paragraph += paragraph_1.strip()
-            if paragraph_2.strip():
-                if final_facts_paragraph:
-                    final_facts_paragraph += "\n\n" + paragraph_2.strip()
-                else:
-                    final_facts_paragraph = paragraph_2.strip()
+                st.success("✅ Report formatted successfully!")
+                
+                # Generate the Word document using the old perfect formatting
+                word_doc = create_tombs_maxwell_template(
+                    cause_number, factoring_company, courthouse, 
+                    report_title, sources_consulted, facts_section, 
+                    valuation_section
+                )
+                
+                if word_doc:
+                    # Get current year's last two digits
+                    current_year = datetime.now().year
+                    year_suffix = str(current_year)[-2:]  # Get last 2 digits (e.g., "25" for 2025)
                     
-        else:
-            final_facts_paragraph = ""  # Other templates don't have this feature yet
-        
-        # Generate report button
-        if st.button("Generate Report", key="report_generate_button"):
-            if all([cause_number, factoring_company, courthouse, payee_name, application_title]) and len(exhibits) == num_exhibits and all(exhibits):
-                # Format exhibits
-                formatted_exhibits = format_exhibits_list(exhibits)
-                
-                # Create prior appointment sentence
-                prior_sentence = ""
-                if prior_appointment == "Yes":
-                    if prior_times == 1:
-                        prior_sentence = f"A review of my files indicated that I had previously been appointed as Guardian Ad Litem for Payee in one prior case. "
-                    else:
-                        prior_sentence = f"A review of my files indicated that I previously had been appointed as Guardian Ad Litem for Payee in {prior_times} prior cases. "
-                
-                # Generate the appropriate report based on selected template
-                if selected_template == "Libertarian Approach - Recommend":
-                    report = generate_libertarian_approach_report(
-                        cause_number, factoring_company, courthouse, payee_name, 
-                        application_title, formatted_exhibits, prior_sentence, 
-                        final_facts_paragraph  # Pass the facts paragraph
+                    # Clean factoring company name for filename (remove special characters)
+                    clean_company_name = "".join(c for c in factoring_company if c.isalnum() or c in (' ', '-', '_')).strip()
+                    clean_company_name = clean_company_name.replace(' ', '_')
+                    
+                    st.success("✅ Word document generated using Tombs Maxwell template!")
+                    st.download_button(
+                        label="📥 Download Word Document",
+                        data=word_doc,
+                        file_name=f"Ad_Litem_{clean_company_name}_{year_suffix}_XX_Draft_1.0.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
-                elif selected_template == "Beginning Slippery Slope - Hesitantly Recommend":
-                    # TODO: Add function for this template
-                    report = "Template not yet implemented - Beginning Slippery Slope"
-                elif selected_template == "Negative - Do Not Recommend":
-                    # TODO: Add function for this template
-                    report = "Template not yet implemented - Negative"
-                elif selected_template == "Life-Contingent Payments - Never Recommend":
-                    # TODO: Add function for this template
-                    report = "Template not yet implemented - Life-Contingent Payments"
+                    
+                    # Also show the text version for backup
+                    st.write("---")
+                    st.subheader("📋 Text Version (Backup)")
+                    st.write("Copy and paste the text below if needed:")
+                    
+                    # Generate the complete formatted text report
+                    formatted_report = f"""CAUSE NO. {cause_number}
+
+IN RE:
+
+{factoring_company}
+
+{courthouse}
+
+{report_title}
+
+{sources_consulted}
+
+{facts_section}
+
+{valuation_section}
+
+Respectfully submitted,
+
+/s/ Joseph W. Tombs
+Joseph W. Tombs
+TOMBS MAXWELL, LLP
+State Bar No. 20116250
+7021 Kewanee Ave. 7-102
+Lubbock, TX 79424
+Office (806) 698-1122
+Tombs@tombsmaxwell.com"""
+                    
+                    # Display the formatted report in a text area for easy copying
+                    st.text_area(
+                        "Formatted Report Text", 
+                        formatted_report, 
+                        height=400, 
+                        key="formatted_report_output"
+                    )
+                    
                 else:
-                    report = "Unknown template selected"
-                
-                st.success("Report generated successfully!")
-                st.subheader("📋 Copy and paste the text below into Microsoft Word:")
-                
-                # Display the report in a text area for easy copying
-                st.text_area("Generated Report", report, height=400, key="report_final_output")
-                
-            else:
-                st.error("Please fill in all required fields and exhibit names before generating the report.")
+                    st.error("❌ Error generating Word document. Please try again.")
+                    
+                    # Fallback to text-only version
+                    st.write("**📋 Text Version Available:**")
+                    formatted_report = f"""CAUSE NO. {cause_number}
+
+IN RE:
+
+{factoring_company}
+
+{courthouse}
+
+{report_title}
+
+{sources_consulted}
+
+{facts_section}
+
+{valuation_section}
+
+Respectfully submitted,
+
+/s/ Joseph W. Tombs
+Joseph W. Tombs
+TOMBS MAXWELL, LLP
+State Bar No. 20116250
+7021 Kewanee Ave. 7-102
+Lubbock, TX 79424
+Office (806) 698-1122
+Tombs@tombsmaxwell.com"""
+                    
+                    st.text_area(
+                        "Formatted Report Text", 
+                        formatted_report, 
+                        height=400, 
+                        key="formatted_report_fallback"
+                    )
