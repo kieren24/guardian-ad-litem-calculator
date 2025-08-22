@@ -18,7 +18,7 @@ from docx.oxml import parse_xml
 def check_password():
     """Returns True if password is correct"""
     def password_entered():
-        if st.session_state["password"] == "AmicusLaw2025":
+        if st.session_state["password"] == "test":
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Clear password from memory
         else:
