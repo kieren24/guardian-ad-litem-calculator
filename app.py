@@ -626,7 +626,7 @@ Tombs@tombsmaxwell.com"""
 
         # NEW: Inform Nick of New Application Section - ADDED AT THE BEGINNING
         st.subheader("📧 Inform Nick of New Application")
-        st.info("When you learn there is a new application, contact Nick to make the call and get the new facts for why the client is selling their payments.")
+        st.info("When you learn there is a new application, contact Nick to make the call and get the new facts for why the client is selling their payments. You will need these facts to generate a report")
         
         # NEW: Lindsey Quote Section - ADDED AT THE BEGINNING
         st.subheader("📧 Get Quote from Lindsey")
