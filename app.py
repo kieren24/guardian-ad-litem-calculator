@@ -718,10 +718,10 @@ Tombs@tombsmaxwell.com"""
             st.write(f"**Group {group_num + 1} aggregate: \\${group_aggregate:,.2f}** ({num_payments}  payments × \\${payment_amount:,.2f} each)")
 
             st.write(f"**Step {5 + step_offset}: Payment Dates - Group {group_num + 1}**")
-            first_payment_date = st.date_input(f"When will the first payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=30), min_value=datetime.now().date(), max_value=datetime.now().date() + timedelta(days=365*50), key=f"financial_first_date_{group_num}")
+            first_payment_date = st.date_input(f"When will the first payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=30), min_value=datetime.now().date() - timedelta(days=365*5), max_value=datetime.now().date() + timedelta(days=365*100), key=f"financial_first_date_{group_num}")
 
             if num_payments > 1:
-                last_payment_date = st.date_input(f"When will the last payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=365), min_value=datetime.now().date(), max_value=datetime.now().date() + timedelta(days=365*50), key=f"financial_last_date_{group_num}")
+                last_payment_date = st.date_input(f"When will the last payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=365), min_value=datetime.now().date() - timedelta(days=365*10), max_value=datetime.now().date() + timedelta(days=365*100), key=f"financial_last_date_{group_num}")
                 if last_payment_date <= first_payment_date:
                     st.error(f"Last payment date must be after first payment date in group {group_num + 1}!")
                     st.stop()
