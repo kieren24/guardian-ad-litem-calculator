@@ -5,12 +5,20 @@ import numpy as np
 from scipy.optimize import newton
 import calendar
 from typing import Dict, Tuple, Optional
+import io
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.shared import OxmlElement, qn
+from docx.oxml.ns import nsdecls
+from docx.oxml import parse_xml
 
 # Password protection - ADD THIS AT THE TOP
 def check_password():
     """Returns True if password is correct"""
     def password_entered():
-        if st.session_state["password"] == "AmicusLaw2025":
+        if st.session_state["password"] == "test":
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Clear password from memory
         else:
@@ -38,6 +46,986 @@ def check_password():
 if check_password():
 
     # ==========================================
+    # STREAMLIT APP INTERFACE
+    # (MAIN APP STRUCTURE - SAFE TO MODIFY LAYOUT)
+    # ==========================================
+    
+    # Streamlit App
+    st.title("🏦 Amicus Law Offices, LLC")
+    
+    # Add tabs for Financial Analysis, Client Phone Call, and Report Creation
+    tab1, tab2, tab3 = st.tabs(["💰 Financial Analysis", "📞 Client Phone Call", "📝 Report Creation"])
+    
+    with tab1:
+        st.header("Financial Analysis")
+
+        # NEW: Inform Nick of New Application Section - ADDED AT THE BEGINNING
+        st.subheader("📧 Inform Nick of New Application")
+        st.info("When you learn there is a new application, contact Nick to make the call and get the new facts for why the client is selling their payments. You will need these facts to generate a report")
+        
+        # NEW: Lindsey Quote Section - ADDED AT THE BEGINNING
+        st.subheader("📧 Get Quote from Lindsey")
+        st.info("Before starting, email Lindsey at **lindsey@amicustrustcompany.com** to request a quote for this case.")
+        
+        # Create two columns for the quote inputs
+        col1, col2 = st.columns(2)
+        with col1:
+            lindsey_quote = st.number_input(
+                "Lindsey's Quote Amount ($):", 
+                min_value=0.0, 
+                value=0.0, 
+                step=100.0, 
+                format="%.2f",
+                key="lindsey_quote_amount"
+            )
+        with col2:
+            lindsey_irr = st.number_input(
+                "Lindsey's IRR (%):", 
+                min_value=0.0, 
+                max_value=100.0, 
+                value=0.0, 
+                step=0.01, 
+                format="%.2f",
+                key="lindsey_irr_percent"
+            )
+        
+        # Store Lindsey's data in session state
+        st.session_state['lindsey_quote'] = lindsey_quote
+        st.session_state['lindsey_irr'] = lindsey_irr / 100.0 if lindsey_irr > 0 else 0.0
+        
+        st.write("---")  # Separator line
+        
+        # Step 1: Number of payment groups
+        st.subheader("Step 1: Select the number of payment groups")
+        st.markdown("*Example 1: if the client is selling 5 payments of \\$7,000 and 2 payments of \\$4,000, you would select '2' because there are two uneven groups.*\n\n*Example 2: if the client is selling 165 payments of \\$500, you would select '1' because it is one large group of equal payments.*")
+        num_groups = st.number_input("How many different payment groups are you selling?", min_value=1, value=1, step=1, key="financial_num_groups")
+
+        # Collect data for each group
+        all_payment_dates = []
+        all_payment_amounts = []
+        total_aggregate = 0
+
+        for group_num in range(num_groups):
+            if num_groups > 1:
+                st.write("---")
+                st.subheader(f"Group {group_num + 1} Details")
+            
+            step_offset = 1 if num_groups == 1 else 0
+            
+            st.write(f"**Step {2 + step_offset}: Payment Information - Group {group_num + 1}**")
+            num_payments = st.number_input(f"How many payments in group {group_num + 1}?", min_value=1, value=1, step=1, key=f"financial_payments_{group_num}")
+
+            # Purchase date selection - only show for the first group
+            if group_num == 0:
+                st.write(f"**Step {3 + step_offset}: Purchase Date**")
+                use_today = st.radio("What date should be used for the purchase?", ["Today's date", "Different date"], key="financial_purchase_date_option")
+                
+                if use_today == "Today's date":
+                    purchase_date = datetime.combine(datetime.now().date(), datetime.min.time())
+                    st.write(f"**Purchase date: {purchase_date.strftime('%m/%d/%Y')}**")
+                else:
+                    custom_purchase_date = st.date_input(
+                        "Select the purchase date:",
+                        value=datetime.now().date(),
+                        min_value=datetime.now().date() - timedelta(days=365*10),
+                        max_value=datetime.now().date() + timedelta(days=365*10),
+                        key="financial_custom_purchase_date"
+                    )
+                    purchase_date = datetime.combine(custom_purchase_date, datetime.min.time())
+                    st.write(f"**Purchase date: {purchase_date.strftime('%m/%d/%Y')}**")
+                
+                # Update step numbers for subsequent steps
+                step_offset += 1
+
+            if num_payments > 1:
+                st.write(f"**Step {3 + step_offset}: Payment Frequency - Group {group_num + 1}**")
+                payment_frequency = st.radio(f"Are these annual or monthly payments?", ["Monthly", "Annual"], key=f"financial_frequency_{group_num}")
+                is_monthly = payment_frequency == "Monthly"
+            else:
+                is_monthly = False
+
+            st.write(f"**Step {4 + step_offset}: Payment Amount - Group {group_num + 1}**")
+            payment_amount = st.number_input(f"How much is each payment in group {group_num + 1}?", min_value=0.01, value=10000.00, step=100.00, format="%.2f", key=f"financial_amount_{group_num}")
+
+            group_aggregate = num_payments * payment_amount
+            total_aggregate += group_aggregate
+            
+            st.write(f"**Group {group_num + 1} aggregate: \\${group_aggregate:,.2f}** ({num_payments}  payments × \\${payment_amount:,.2f} each)")
+
+            st.write(f"**Step {5 + step_offset}: Payment Dates - Group {group_num + 1}**")
+            first_payment_date = st.date_input(f"When will the first payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=30), min_value=datetime.now().date() - timedelta(days=365*5), max_value=datetime.now().date() + timedelta(days=365*100), key=f"financial_first_date_{group_num}")
+
+            if num_payments > 1:
+                last_payment_date = st.date_input(f"When will the last payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=365), min_value=datetime.now().date() - timedelta(days=365*10), max_value=datetime.now().date() + timedelta(days=365*100), key=f"financial_last_date_{group_num}")
+                if last_payment_date <= first_payment_date:
+                    st.error(f"Last payment date must be after first payment date in group {group_num + 1}!")
+                    st.stop()
+            else:
+                last_payment_date = first_payment_date
+
+            group_dates, group_amounts = generate_payment_schedule(num_payments, payment_amount, datetime.combine(first_payment_date, datetime.min.time()), datetime.combine(last_payment_date, datetime.min.time()), is_monthly)
+            
+            all_payment_dates.extend(group_dates)
+            all_payment_amounts.extend(group_amounts)
+
+        # Overall verification step
+        st.write("---")
+        st.subheader("⚠️ Overall Verification Step")
+        st.write(f"**The total aggregate of ALL payments is ${total_aggregate:,.2f}**")
+        if num_groups > 1:
+            st.write("**Breakdown by group:**")
+            for group_num in range(num_groups):
+                num_payments_group = st.session_state.get(f"financial_payments_{group_num}", 1)
+                amount_group = st.session_state.get(f"financial_amount_{group_num}", 10000.0)
+                group_total = num_payments_group * amount_group
+                st.write(f"• Group {group_num + 1}: {num_payments_group} payments × \\${amount_group:,.2f} = \\${group_total:,.2f}")
+
+        aggregate_correct = st.radio("Is this total aggregate amount correct?", ["Select an option", "Yes, this is correct", "No, I need to update my numbers"], key="financial_aggregate_check")
+
+        if aggregate_correct == "No, I need to update my numbers":
+            st.warning("Please update your numbers above and check again.")
+            st.stop()
+        elif aggregate_correct == "Select an option":
+            st.info("Please confirm if the total aggregate amount is correct before continuing.")
+            st.stop()
+        elif aggregate_correct == "Yes, this is correct":
+            st.success("Great! Let's continue with the purchase price.")
+
+        # Purchase price
+        final_step = 7 if num_groups == 1 else 3 + num_groups * 4
+        st.subheader(f"Step {final_step}: Purchase Price")
+        purchase_price = st.number_input("How much is the factoring company buying ALL the payments for?", min_value=0.01, value=float(total_aggregate * 0.85), step=100.00, format="%.2f", key="financial_purchase_price")
+
+        # Competitor analysis settings
+        st.subheader(f"Step {final_step + 1}: Competitor Analysis")
+        st.write("For competitor quote calculation, we need to set a target profit to determine competitive pricing.")
+        use_default_target_profit = st.radio(
+            "What target profit should we use for competitor quote calculation?", 
+            ["Use $2,500 (default)", "Specify a different target profit"],
+            key="financial_target_profit_choice"
+        )
+
+        if use_default_target_profit == "Use $2,500 (default)":
+            target_profit = 2500
+            st.write("**Using target profit: $2,500**")
+        else:
+            target_profit = st.number_input(
+                "Enter the target profit amount:", 
+                min_value=0.0, 
+                value=2500.0, 
+                step=100.0, 
+                format="%.2f",
+                key="financial_custom_target_profit"
+            )
+            st.write(f"**Using target profit: ${target_profit:,.2f}**")
+
+        st.subheader("📊 Results & Analysis")
+
+        # Sort all payments by date
+        sorted_payment_pairs = sorted(zip(all_payment_dates, all_payment_amounts))
+        payment_dates = [pair[0] for pair in sorted_payment_pairs]
+        payment_amounts = [pair[1] for pair in sorted_payment_pairs]
+
+        # Use the selected purchase date (either today or custom)
+        cashflows = [-purchase_price] + payment_amounts
+        dates = [purchase_date] + payment_dates
+
+        irr_rate = xirr(cashflows, dates)
+
+        if irr_rate is not None:
+            # Calculate duration
+            duration_years = calculate_duration(payment_dates, payment_amounts, purchase_date, irr_rate)
+            
+            # Determine which treasury bounds we need for the duration
+            lower_bound, upper_bound = find_treasury_bounds(duration_years)
+            
+            # Display duration and treasury requirements
+            st.write("---")
+            st.subheader("🏛️ Treasury Rate Input Required")
+            st.subheader(f"Duration: {duration_years:.2f} years")
+            st.write(f"**Purchase date used: {purchase_date.strftime('%m/%d/%Y')}**")
+            
+            # Get series information for the bounds
+            lower_series_info = get_treasury_series_info(lower_bound)
+            upper_series_info = get_treasury_series_info(upper_bound)
+            
+            if lower_bound == upper_bound:
+                st.write(f"**Need: {lower_series_info['display_name']} treasury rate** (duration ≥ 30 years, capped)")
+                st.write(f"📄 **Get the current rate from:** https://fred.stlouisfed.org/series/{lower_series_info['series_id']}")
+                
+                # Single rate input
+                manual_rate = st.number_input(
+                    f"{lower_series_info['display_name']} Treasury Rate (%)",
+                    min_value=0.0,
+                    max_value=20.0,
+                    value=4.0,
+                    step=0.01,
+                    format="%.2f",
+                    help=f"Enter the most recent rate from the FRED page above",
+                    key="financial_single_treasury_rate"
+                )
+                lower_rate = upper_rate = manual_rate / 100.0
+                
+            else:
+                st.write(f"**Need: {lower_series_info['display_name']} and {upper_series_info['display_name']} treasury rates** for interpolation")
+                st.write(f"📄 **Get the current rates from:**")
+                st.write(f"• **{lower_series_info['display_name']}:** https://fred.stlouisfed.org/series/{lower_series_info['series_id']}")
+                st.write(f"• **{upper_series_info['display_name']}:** https://fred.stlouisfed.org/series/{upper_series_info['series_id']}")
+                
+                # Two rate inputs
+                col1, col2 = st.columns(2)
+                with col1:
+                    manual_lower = st.number_input(
+                        f"{lower_series_info['display_name']} Treasury Rate (%)",
+                        min_value=0.0,
+                        max_value=20.0,
+                        value=4.0,
+                        step=0.01,
+                        format="%.2f",
+                        help=f"Enter the most recent rate from the FRED page above",
+                        key="financial_lower_treasury_rate"
+                    )
+                with col2:
+                    manual_upper = st.number_input(
+                        f"{upper_series_info['display_name']} Treasury Rate (%)",
+                        min_value=0.0,
+                        max_value=20.0,
+                        value=4.2,
+                        step=0.01,
+                        format="%.2f",
+                        help=f"Enter the most recent rate from the FRED page above",
+                        key="financial_upper_treasury_rate"
+                    )
+                
+                lower_rate = manual_lower / 100.0
+                upper_rate = manual_upper / 100.0
+            
+            # Spread input
+            st.write("**📊 Spread Configuration**")
+            use_default_spread = st.radio(
+                "Would you like to use the default spread of 3.0%?", 
+                ["Yes, use 3.0%", "No, I want to specify a different spread"],
+                key="financial_spread_choice"
+            )
+            
+            if use_default_spread == "Yes, use 3.0%":
+                spread = 0.03
+                st.write("**Using default spread: 3.0%**")
+            else:
+                spread_percentage = st.number_input(
+                    "Enter the spread percentage:", 
+                    min_value=0.0, 
+                    max_value=10.0,
+                    value=3.0, 
+                    step=0.1, 
+                    format="%.1f",
+                    key="financial_custom_spread"
+                )
+                spread = spread_percentage / 100.0
+                st.write(f"**Using custom spread: {spread_percentage:.1f}%**")
+            
+            # Calculate Excel discount rate using treasury rates and spread
+            excel_discount_rate = calculate_excel_discount_rate(duration_years, lower_bound, upper_bound, lower_rate, upper_rate, spread)
+            
+            # Calculate wholesale price, profit, and competitor analysis
+            total_payments = sum(payment_amounts)
+            wholesale_price = calculate_wholesale_price(purchase_price, duration_years, total_payments, payment_dates, payment_amounts, purchase_date, excel_discount_rate)
+            profit = calculate_profit(wholesale_price, purchase_price)
+            competitor_quote = calculate_competitor_quote(purchase_price, profit, target_profit)
+            
+            # Calculate the profit if we match competitor's quote
+            competitor_profit = calculate_profit(wholesale_price, competitor_quote)
+            
+            # Calculate XIRR for competitive scenario
+            competitive_cashflows = [-competitor_quote] + payment_amounts
+            competitive_dates = [purchase_date] + payment_dates
+            competitive_irr = xirr(competitive_cashflows, competitive_dates)
+            
+            # Financial summary - Updated format
+            st.write("**📈 Profit Analysis**")
+            
+            # Side-by-side profit calculations
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**💰 Factoring Company**")
+                st.code(f"""
+    Wholesale Price:       ${wholesale_price:,.2f}
+    Less Purchase Price:  -${purchase_price:,.2f}
+    Less Legal Costs:     -$6,000.00
+                          ________________
+    Profit:                ${profit:,.2f}
+                """)
+                st.markdown(f"""
+                <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
+                    <div style="font-size: 14px; color: #666;">Factoring Company Discount Rate</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #333;">{irr_rate:.2%}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.write("**🏢 Competitive Analysis**")
+                competitive_irr_display = f"{competitive_irr:.2%}" if competitive_irr is not None else "N/A"
+                st.code(f"""
+    Wholesale Price:         ${wholesale_price:,.2f}
+    Less Competitive Quote: -${competitor_quote:,.2f}
+    Less Legal Costs:       -$6,000.00
+                          ________________
+    Profit:                ${competitor_profit:,.2f}
+                """)
+                st.markdown(f"""
+                <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
+                    <div style="font-size: 14px; color: #666;">Competitive Quote Discount Rate</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #333;">{competitive_irr_display}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Payment schedule
+            st.write("**📅 Payment Schedule**")
+            df = pd.DataFrame({
+                'Payment Date': [d.strftime('%m/%d/%Y') for d in payment_dates], 
+                'Payment Amount': [f"${amount:,.2f}" for amount in payment_amounts]
+            })
+            st.dataframe(df, hide_index=True)
+            
+            # Store financial data in session state for report creation
+            st.session_state['financial_complete'] = True
+            st.session_state['num_groups'] = num_groups
+            st.session_state['total_aggregate'] = total_aggregate
+            st.session_state['purchase_price'] = purchase_price
+            st.session_state['all_payment_dates'] = all_payment_dates
+            st.session_state['all_payment_amounts'] = all_payment_amounts
+            st.session_state['irr_rate'] = irr_rate
+            st.session_state['wholesale_price'] = wholesale_price
+            st.session_state['excel_discount_rate'] = excel_discount_rate
+            st.session_state['profit'] = profit
+            st.session_state['competitor_quote'] = competitor_quote
+            st.session_state['competitive_irr'] = competitive_irr
+            st.session_state['competitor_profit'] = competitor_profit
+            
+            # Detailed calculations (expandable) - MODIFIED TO INCLUDE LINDSEY'S DATA
+            with st.expander("🔬 Detailed Calculations"):
+                st.write("**Duration Calculation Details:**")
+                duration_details = []
+                total_pv = 0
+                total_time_weighted_pv = 0
+                
+                for i, (payment_date, payment_amount) in enumerate(zip(payment_dates, payment_amounts)):
+                    years = (payment_date - purchase_date).days / 365.0
+                    pv = payment_amount / ((1 + irr_rate) ** years)
+                    time_weighted_pv = pv * years
+                    
+                    total_pv += pv
+                    total_time_weighted_pv += time_weighted_pv
+                    
+                    duration_details.append({
+                        'Payment #': i + 1,
+                        'Date': payment_date.strftime('%m/%d/%Y'),
+                        'Years': f"{years:.3f}",
+                        'Payment Amount': f"${payment_amount:,.2f}",
+                        'Present Value': f"${pv:,.2f}",
+                        'PV × Years': f"${time_weighted_pv:,.2f}"
+                    })
+                
+                duration_df = pd.DataFrame(duration_details)
+                st.dataframe(duration_df, hide_index=True)
+                
+                st.write(f"**Duration = ${total_time_weighted_pv:,.2f} ÷ ${total_pv:,.2f} = {duration_years:.6f} years**")
+                
+                # Calculate the XNPV components for display using Excel's discount rate and actual payments
+                xnpv_initial = -purchase_price
+                xnpv_payments = 0
+                
+                for payment_date, payment_amount in zip(payment_dates, payment_amounts):
+                    days_diff = (payment_date - purchase_date).days
+                    years_diff = days_diff / 365.0
+                    if years_diff >= 0:
+                        pv = payment_amount / ((1 + excel_discount_rate) ** years_diff)
+                        xnpv_payments += pv
+                
+                xnpv_value = xnpv_initial + xnpv_payments
+                
+                # MODIFIED: Financial Calculations section now includes Lindsey's data
+                st.write("**Financial Calculations:**")
+                lindsey_quote_display = f"${st.session_state.get('lindsey_quote', 0):,.2f}" if st.session_state.get('lindsey_quote', 0) > 0 else "Not provided"
+                lindsey_irr_display = f"{st.session_state.get('lindsey_irr', 0):.2%}" if st.session_state.get('lindsey_irr', 0) > 0 else "Not provided"
+                
+                st.code(f"""
+    === LINDSEY'S QUOTE ===
+    Lindsey's Quote Amount: {lindsey_quote_display}
+    Lindsey's IRR: {lindsey_irr_display}
+    
+    === CALCULATED VALUES ===
+    Total Payments: ${total_payments:,.2f}
+    Purchase Price: ${purchase_price:,.2f}
+    Duration: {duration_years:.3f} years
+    Number of Payments: {len(payment_dates)}
+    
+    Treasury Rates Used:
+      Lower Bound ({lower_bound}Y): {lower_rate:.4f} ({lower_rate:.2%})
+      Upper Bound ({upper_bound}Y): {upper_rate:.4f} ({upper_rate:.2%})
+    
+    Excel Discount Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
+    (Formula: ((Duration-{lower_bound})/({upper_bound}-{lower_bound})*({upper_rate:.4f}-{lower_rate:.4f}))+{lower_rate:.4f}+{spread:.3f})
+    
+    Spread Used: {spread:.1%}
+    
+    XNPV Calculation (using actual payment schedule):
+      PV of initial outflow: ${xnpv_initial:,.2f}
+      PV of all payments: ${xnpv_payments:,.2f}
+      XNPV Total: ${xnpv_value:,.2f}
+    
+    Wholesale Price: ${wholesale_price:,.2f} (Purchase Price + XNPV)
+    Competitor Quote: ${competitor_quote:,.2f}
+    Target Profit Used: ${target_profit:,.2f}
+                """)
+
+            # Navigation guidance
+            st.write("---")
+            st.write("### ✅ Financial Analysis Complete!")
+            st.write("Ready to conduct the client phone call? Click the **📞 Client Phone Call** tab above to continue.")
+
+        else:
+            st.error("Could not calculate XIRR. Please check your inputs.")
+
+    # NEW TAB 2 - Client Phone Call
+    with tab2:
+        st.header("Client Phone Call Information")
+        
+        # Important notice at the top
+        st.info("⚠️ **Important Reminder for Client:** If you ever feel pressured to make this sale, Joe has the ability to get this transaction cancelled - even if you change your mind the day of the hearing. He can get the judge to cancel it.")
+        
+        st.write("---")
+        
+        # Call Information
+        st.subheader("Call Information")
+        client_age = st.selectbox("Age:", options=list(range(18, 101)), index=0, key="client_age")
+        
+        st.write("---")
+        
+        # Annuitant Living Arrangements
+        st.subheader("Annuitant Living Arrangements")
+        
+        is_married = st.radio("Married:", ["Yes", "No"], key="is_married")
+        if is_married == "Yes":
+            living_with_spouse = st.radio("Living with spouse:", ["Yes", "No"], key="living_with_spouse")
+        
+        has_minor_children = st.radio("Minor children:", ["Yes", "No"], key="has_minor_children")
+        if has_minor_children == "Yes":
+            num_children = st.selectbox("How many minor children?", options=list(range(1, 11)), key="num_children")
+            st.write("**Ages of children:**")
+            for i in range(num_children):
+                st.selectbox(f"Child {i+1} age:", options=list(range(0, 18)), key=f"child_{i}_age")
+        
+        has_other_dependents = st.radio("Any other dependents living with you:", ["Yes", "No"], key="has_other_dependents")
+        if has_other_dependents == "Yes":
+            other_dependents_desc = st.text_area("Describe other dependents:", key="other_dependents_desc")
+        
+        housing_situation = st.radio("Housing situation:", ["House", "Apartment", "Other"], key="housing_situation")
+        housing_description = st.text_input("Description (e.g., 3 bed 2 bath home):", key="housing_description")
+        
+        rent_or_own = st.radio("Rent or Own:", ["Rent", "Own"], key="rent_or_own")
+        if rent_or_own == "Rent":
+            monthly_rent = st.number_input("Monthly Rent ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="monthly_rent")
+        elif rent_or_own == "Own":
+            has_mortgage = st.radio("Do you still have a monthly mortgage?", ["Yes", "No"], key="has_mortgage")
+            if has_mortgage == "Yes":
+                monthly_mortgage = st.number_input("Monthly Mortgage ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="monthly_mortgage")
+        
+        st.write("---")
+        
+        # Annuitant's Financial Situation Outside of Settlement
+        st.subheader("Annuitant's Financial Situation Outside of Settlement")
+        
+        education = st.radio("Education background:", [
+            "Did not complete high school",
+            "GED",
+            "Certificate",
+            "Some college",
+            "Associates degree",
+            "Bachelors degree",
+            "Graduate degree"
+        ], key="education")
+        
+        if education == "Some college":
+            college_years = st.number_input("How many years of college?", min_value=1, max_value=10, value=1, key="college_years")
+        elif education in ["Certificate", "Associates degree", "Bachelors degree", "Graduate degree"]:
+            degree_field = st.text_input("What field/subject?", key="degree_field")
+        
+        is_employed = st.radio("Employed:", ["Yes", "No"], key="is_employed")
+        employment_description = st.text_area("Job description or reason not employed:", key="employment_description")
+        
+        if is_employed == "Yes":
+            employment_type = st.radio("Employment type:", ["Full time", "Part time"], key="employment_type")
+            salary_period = st.radio("Salary reported as:", ["Weekly", "Bi-weekly", "Monthly", "Annual"], key="salary_period")
+            salary_amount = st.number_input("Salary amount ($):", min_value=0.0, value=0.0, step=100.0, format="%.2f", key="salary_amount")
+            
+            # Calculate annualized salary
+            if salary_period == "Weekly":
+                annual_salary = salary_amount * 52
+            elif salary_period == "Bi-weekly":
+                annual_salary = salary_amount * 26
+            elif salary_period == "Monthly":
+                annual_salary = salary_amount * 12
+            else:  # Annual
+                annual_salary = salary_amount
+            
+            st.write(f"**Annualized Salary: ${annual_salary:,.2f}**")
+            st.session_state['annual_salary'] = annual_salary
+        
+        has_other_income = st.radio("Other income sources (renting, side hustle, etc.):", ["Yes", "No"], key="has_other_income")
+        if has_other_income == "Yes":
+            other_income_desc = st.text_area("Describe other income sources:", key="other_income_desc")
+        
+        has_assets = st.radio("Available Assets (home, land, cars, jewelry, stocks, bonds, etc.):", ["Yes", "No"], key="has_assets")
+        if has_assets == "Yes":
+            assets_description = st.text_area("Describe assets:", key="assets_description")
+            assets_total = st.number_input("Total value of assets ($):", min_value=0.0, value=0.0, step=1000.0, format="%.2f", key="assets_total")
+        
+        has_debt = st.radio("Debt obligations (mortgage, credit cards, auto loans, student loans, etc.):", ["Yes", "No"], key="has_debt")
+        if has_debt == "Yes":
+            debt_description = st.text_area("Describe debt obligations:", key="debt_description")
+            debt_total = st.number_input("Total debt amount ($):", min_value=0.0, value=0.0, step=1000.0, format="%.2f", key="debt_total")
+            debt_monthly_payment = st.number_input("Average monthly payment on all debts ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="debt_monthly_payment")
+        
+        has_future_liabilities = st.radio("Future liabilities (any upcoming large expenses you know of):", ["Yes", "No"], key="has_future_liabilities")
+        if has_future_liabilities == "Yes":
+            future_liabilities_desc = st.text_area("Describe future liabilities:", key="future_liabilities_desc")
+        
+        st.write("**Monthly Expenses:**")
+        col1, col2 = st.columns(2)
+        with col1:
+            expense_food = st.number_input("Food/Groceries ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_food")
+            expense_utilities = st.number_input("Utilities ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_utilities")
+            expense_bills = st.number_input("Bills/Insurance ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_bills")
+        with col2:
+            expense_entertainment = st.number_input("Entertainment ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_entertainment")
+            expense_other = st.number_input("Other ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_other")
+        
+        total_monthly_expenses = expense_food + expense_utilities + expense_bills + expense_entertainment + expense_other
+        st.write(f"**Total Monthly Expenses: ${total_monthly_expenses:,.2f}**")
+        
+        # Calculate monthly income and net savings
+        monthly_income_after_tax = 0
+        if is_employed == "Yes" and 'annual_salary' in st.session_state:
+            monthly_income_after_tax = (st.session_state['annual_salary'] / 12) * 0.85
+        
+        net_savings = monthly_income_after_tax - total_monthly_expenses
+        
+        st.write(f"**Monthly Income (after 85% tax adjustment): ${monthly_income_after_tax:,.2f}**")
+        st.write(f"**Net Savings: ${net_savings:,.2f}**")
+        
+        can_provide_for_needs = st.radio("Can you provide for your own needs on a monthly basis?", ["Yes", "No"], key="can_provide_for_needs")
+        if can_provide_for_needs == "Yes":
+            st.write(f"There is roughly ${net_savings:,.2f} left over after expenses.")
+            does_save = st.radio("Do you save any of it?", ["Yes", "No"], key="does_save")
+            savings_description = st.text_area("Describe what they said about savings:", key="savings_description")
+        
+        st.write("---")
+        
+        # Settlement Payments
+        st.subheader("Settlement Payments")
+        
+        contract_description = st.text_area("What is the contract for? (e.g., '200 monthly payments of $500 starting 1/1/2029...'):", key="contract_description")
+        lump_sum_amount = st.number_input("Lump sum dollar amount payable to annuitant from factoring company ($):", min_value=0.0, value=0.0, step=100.0, format="%.2f", key="lump_sum_amount")
+        
+        how_obtained_payments = st.text_area("How did you obtain these payments? (This is crucial for the report):", key="how_obtained_payments")
+        
+        was_injured = st.radio("Was annuitant injured?", ["Yes", "No"], key="was_injured")
+        if was_injured == "Yes":
+            had_brain_damage = st.radio("Did they have any head or brain damage?", ["Yes", "No"], key="had_brain_damage")
+            if had_brain_damage == "Yes":
+                recovery_level = st.text_area("What is their level of recovery?", key="recovery_level")
+            has_guardianship = st.radio("Do they have existing guardianship?", ["Yes", "No"], key="has_guardianship")
+            mental_faculties_assessment = st.text_area("Your assessment of their mental faculties:", key="mental_faculties_assessment")
+        
+        initial_payment_details = st.text_area("Initial Amount of Payments (monthly or lump-sum? any aged out? what payments remaining and for how much?):", key="initial_payment_details")
+        
+        sold_payments_previously = st.radio("Has annuitant sold any payments previously?", ["Yes", "No"], key="sold_payments_previously")
+        if sold_payments_previously == "Yes":
+            previous_sales_count = st.text_area("How many times? (they often give a range):", key="previous_sales_count")
+        
+        payments_life_contingent = st.radio("Are these payments life contingent (do they have a beneficiary to receive money if they die)?", ["Yes", "No"], key="payments_life_contingent")
+        
+        st.write("---")
+        
+        # Purpose of the Sale
+        st.subheader("Purpose of the Sale")
+        
+        rationale_for_sale = st.text_area("Rationale for selling payments:", key="rationale_for_sale")
+        
+        pursued_other_financing = st.radio("Other means of financing pursued (bank, family, student loans, etc.):", ["Yes", "No"], key="pursued_other_financing")
+        if pursued_other_financing == "Yes":
+            other_financing_desc = st.text_area("Describe other financing attempts:", key="other_financing_desc")
+        
+        what_if_not_approved = st.text_area("What happens if this sale is not approved?", key="what_if_not_approved")
+        
+        st.write("---")
+        
+        # Generate Summary Document
+        st.subheader("📋 Generated Summary Document")
+        
+        if st.button("Generate Summary Document", key="generate_summary_button"):
+            # Check if financial analysis is complete
+            if not st.session_state.get('financial_complete', False):
+                st.error("❌ Please complete the Financial Analysis tab first before generating the summary.")
+            else:
+                # Get financial data from session state
+                purchase_price = st.session_state.get('purchase_price', 0)
+                irr_rate = st.session_state.get('irr_rate', 0)
+                lindsey_quote = st.session_state.get('lindsey_quote', 0)
+                lindsey_irr = st.session_state.get('lindsey_irr', 0)
+                wholesale_price = st.session_state.get('wholesale_price', 0)
+                excel_discount_rate = st.session_state.get('excel_discount_rate', 0)
+                profit = st.session_state.get('profit', 0)
+                competitor_quote = st.session_state.get('competitor_quote', 0)
+                competitive_irr = st.session_state.get('competitive_irr', 0)
+                competitor_profit = st.session_state.get('competitor_profit', 0)
+                
+                # Generate the summary paragraph
+                summary_paragraph = f"""Payee is seeking to sell {contract_description} in exchange for ${purchase_price:,.2f}. The discount rate on the proposed purchase price is {irr_rate:.2%}. The price of an annuity today is ${lindsey_quote:,.2f} with an IRR of {lindsey_irr:.2%}. The wholesale market price of this payment stream is ${wholesale_price:,.2f} and the wholesale rate is {excel_discount_rate:.2%}. That means the factoring company would be making ${profit:,.2f} (${wholesale_price:,.2f} - $6,000 - ${purchase_price:,.2f}). The estimated fair market value is ${competitor_quote:,.2f} with a discount rate of {competitive_irr:.2%}, meaning the profit from a fair market offer would be ${competitor_profit:,.2f}."""
+                
+                # Display the full summary document
+                st.success("✅ Summary document generated!")
+                
+                full_document = f"""
+CLIENT PHONE CALL SUMMARY
+
+CALL INFORMATION
+Age: {client_age}
+
+ANNUITANT LIVING ARRANGEMENTS
+Married: {is_married}
+"""
+                if is_married == "Yes":
+                    full_document += f"Living with spouse: {living_with_spouse}\n"
+                
+                full_document += f"Minor children: {has_minor_children}\n"
+                if has_minor_children == "Yes":
+                    full_document += f"Number of children: {num_children}\n"
+                    for i in range(num_children):
+                        child_age = st.session_state.get(f"child_{i}_age", 0)
+                        full_document += f"  Child {i+1} age: {child_age}\n"
+                
+                full_document += f"Other dependents: {has_other_dependents}\n"
+                if has_other_dependents == "Yes":
+                    full_document += f"Other dependents description: {other_dependents_desc}\n"
+                
+                full_document += f"""Housing situation: {housing_situation}
+Housing description: {housing_description}
+Rent or Own: {rent_or_own}
+"""
+                if rent_or_own == "Rent":
+                    full_document += f"Monthly Rent: ${monthly_rent:,.2f}\n"
+                elif rent_or_own == "Own":
+                    full_document += f"Has mortgage: {has_mortgage}\n"
+                    if has_mortgage == "Yes":
+                        full_document += f"Monthly Mortgage: ${monthly_mortgage:,.2f}\n"
+                
+                full_document += f"""
+ANNUITANT'S FINANCIAL SITUATION OUTSIDE OF SETTLEMENT
+Education background: {education}
+"""
+                if education == "Some college":
+                    full_document += f"Years of college: {college_years}\n"
+                elif education in ["Certificate", "Associates degree", "Bachelors degree", "Graduate degree"]:
+                    full_document += f"Field/Subject: {degree_field}\n"
+                
+                full_document += f"""Employed: {is_employed}
+Employment description: {employment_description}
+"""
+                if is_employed == "Yes":
+                    full_document += f"""Employment type: {employment_type}
+Salary period: {salary_period}
+Salary amount: ${salary_amount:,.2f}
+Annualized Salary: ${annual_salary:,.2f}
+"""
+                
+                full_document += f"Other income sources: {has_other_income}\n"
+                if has_other_income == "Yes":
+                    full_document += f"Other income description: {other_income_desc}\n"
+                
+                full_document += f"Available Assets: {has_assets}\n"
+                if has_assets == "Yes":
+                    full_document += f"""Assets description: {assets_description}
+Total assets: ${assets_total:,.2f}
+"""
+                
+                full_document += f"Debt obligations: {has_debt}\n"
+                if has_debt == "Yes":
+                    full_document += f"""Debt description: {debt_description}
+Total debt: ${debt_total:,.2f}
+Monthly debt payment: ${debt_monthly_payment:,.2f}
+"""
+                
+                full_document += f"Future liabilities: {has_future_liabilities}\n"
+                if has_future_liabilities == "Yes":
+                    full_document += f"Future liabilities description: {future_liabilities_desc}\n"
+                
+                full_document += f"""
+MONTHLY EXPENSES
+Food/Groceries: ${expense_food:,.2f}
+Utilities: ${expense_utilities:,.2f}
+Bills/Insurance: ${expense_bills:,.2f}
+Entertainment: ${expense_entertainment:,.2f}
+Other: ${expense_other:,.2f}
+Total Monthly Expenses: ${total_monthly_expenses:,.2f}
+
+Monthly Income (after tax): ${monthly_income_after_tax:,.2f}
+Net Savings: ${net_savings:,.2f}
+
+Can provide for own needs: {can_provide_for_needs}
+"""
+                if can_provide_for_needs == "Yes":
+                    full_document += f"""Does save money: {does_save}
+Savings description: {savings_description}
+"""
+                
+                full_document += f"""
+SETTLEMENT PAYMENTS
+Contract description: {contract_description}
+Lump sum amount from factoring company: ${lump_sum_amount:,.2f}
+How payments were obtained: {how_obtained_payments}
+
+Was injured: {was_injured}
+"""
+                if was_injured == "Yes":
+                    full_document += f"Had brain damage: {had_brain_damage}\n"
+                    if had_brain_damage == "Yes":
+                        full_document += f"Recovery level: {recovery_level}\n"
+                    full_document += f"""Has guardianship: {has_guardianship}
+Mental faculties assessment: {mental_faculties_assessment}
+"""
+                
+                full_document += f"""Initial payment details: {initial_payment_details}
+Sold payments previously: {sold_payments_previously}
+"""
+                if sold_payments_previously == "Yes":
+                    full_document += f"Number of previous sales: {previous_sales_count}\n"
+                
+                full_document += f"""Payments life contingent: {payments_life_contingent}
+
+PURPOSE OF THE SALE
+Rationale for selling: {rationale_for_sale}
+Pursued other financing: {pursued_other_financing}
+"""
+                if pursued_other_financing == "Yes":
+                    full_document += f"Other financing description: {other_financing_desc}\n"
+                
+                full_document += f"""What if not approved: {what_if_not_approved}
+
+---
+
+FINANCIAL ANALYSIS SUMMARY
+
+{summary_paragraph}
+"""
+                
+                # Display in a text area for easy copying
+                st.text_area("Complete Summary Document", full_document, height=400, key="complete_summary_output")
+                
+                # Store for use in report generation
+                st.session_state['client_call_complete'] = True
+                st.session_state['summary_document'] = full_document
+                st.session_state['summary_paragraph'] = summary_paragraph
+        
+        st.write("---")
+        st.write("### ✅ Client Phone Call Complete!")
+        st.write("Ready to create your Guardian Ad Litem report? Click the **📝 Report Creation** tab above to continue.")
+    
+    # UPDATED TAB 3 - Report Creation (combines new simplified input with old perfect formatting)
+    with tab3:
+        st.header("Report Formatting Tool")
+        st.write("Use this tool to format your AI-generated Guardian Ad Litem report into a properly formatted Word document.")
+        
+        # Check if financial analysis is complete
+        if not st.session_state.get('financial_complete', False):
+            st.warning("⚠️ Please complete the **💰 Financial Analysis** tab first.")
+            st.info("👈 Click the **Financial Analysis** tab to get started!")
+        
+        st.write("---")
+        
+        # STEP 1: Basic case information (reduced to 3 questions)
+        st.subheader("Step 1: Basic Case Information")
+        
+        cause_number = st.text_input(
+            "What is the cause number?", 
+            value="", 
+            key="report_cause_number",
+            help="Example: CC-2024-CV-0656"
+        )
+        
+        factoring_company = st.text_input(
+            "What is the factoring company's name on the application?", 
+            value="", 
+            key="report_factoring_company",
+            help="Example: J.G. WENTWORTH ORIGINATIONS, LLC"
+        )
+        
+        courthouse = st.text_input(
+            "What is the court, number, county, state on the application?", 
+            value="", 
+            key="report_courthouse",
+            help="Example: IN THE COUNTY COURT AT LAW NUMBER THREE (3) OF LUBBOCK COUNTY, TEXAS"
+        )
+        
+        st.write("---")
+        
+        # STEP 2: Report sections (paste AI-generated content)
+        st.subheader("Step 2: Paste Report Content")
+        st.info("📝 Copy and paste each section from your AI-generated report below. The formatting will be preserved exactly as you paste it.")
+        
+        # Report title section
+        report_title = st.text_area(
+            "Report of Guardian Ad Litem",
+            height=100,
+            placeholder="Paste the introductory paragraph here...",
+            key="report_title_section",
+            help="This is the paragraph right below Report of Guardian Ad Litem"
+        )
+        
+        # Sources Consulted section
+        sources_consulted = st.text_area(
+            "SOURCES CONSULTED:",
+            height=150,
+            placeholder="Paste the entire SOURCES CONSULTED section here...",
+            key="report_sources_section",
+            help="This section describes what documents were reviewed"
+        )
+        
+        # Facts section
+        facts_section = st.text_area(
+            "FACTS:",
+            height=200,
+            placeholder="Paste the entire FACTS section here...",
+            key="report_facts_section",
+            help="This section contains the background and payment details"
+        )
+        
+        # Valuation and Recommendation section
+        valuation_section = st.text_area(
+            "VALUATION and RECOMMENDATION:",
+            height=200,
+            placeholder="Paste the entire VALUATION and RECOMMENDATION section here...",
+            key="report_valuation_section",
+            help="This section contains the analysis and final recommendation"
+        )
+        
+        st.write("---")
+        
+        # STEP 3: Generate formatted report
+        st.subheader("Step 3: Generate Formatted Report")
+        
+        if st.button("Generate Formatted Report", key="format_report_button"):
+            # Check that all required fields are filled
+            if not all([cause_number, factoring_company, courthouse, report_title, sources_consulted, facts_section, valuation_section]):
+                st.error("❌ Please fill in all required fields before generating the report.")
+            else:
+                st.success("✅ Report formatted successfully!")
+                
+                # Generate the Word document using the old perfect formatting
+                word_doc = create_tombs_maxwell_template(
+                    cause_number, factoring_company, courthouse, 
+                    report_title, sources_consulted, facts_section, 
+                    valuation_section
+                )
+                
+                if word_doc:
+                    # Get current year's last two digits
+                    current_year = datetime.now().year
+                    year_suffix = str(current_year)[-2:]  # Get last 2 digits (e.g., "25" for 2025)
+                    
+                    # Clean factoring company name for filename (remove special characters)
+                    clean_company_name = "".join(c for c in factoring_company if c.isalnum() or c in (' ', '-', '_')).strip()
+                    clean_company_name = clean_company_name.replace(' ', '_')
+                    
+                    st.success("✅ Word document generated using Tombs Maxwell template!")
+                    st.download_button(
+                        label="📥 Download Word Document",
+                        data=word_doc,
+                        file_name=f"Ad_Litem_{clean_company_name}_{year_suffix}_XX_Draft_1.0.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+                    
+                    # Also show the text version for backup
+                    st.write("---")
+                    st.subheader("📋 Text Version (Backup)")
+                    st.write("Copy and paste the text below if needed:")
+                    
+                    # Generate the complete formatted text report
+                    formatted_report = f"""CAUSE NO. {cause_number}
+
+IN RE:
+
+{factoring_company}
+
+{courthouse}
+
+{report_title}
+
+{sources_consulted}
+
+{facts_section}
+
+{valuation_section}
+
+Respectfully submitted,
+
+/s/ Joseph W. Tombs
+Joseph W. Tombs
+TOMBS MAXWELL, LLP
+State Bar No. 20116250
+7021 Kewanee Ave. 7-102
+Lubbock, TX 79424
+Office (806) 698-1122
+Tombs@tombsmaxwell.com"""
+                    
+                    # Display the formatted report in a text area for easy copying
+                    st.text_area(
+                        "Formatted Report Text", 
+                        formatted_report, 
+                        height=400, 
+                        key="formatted_report_output"
+                    )
+                    
+                else:
+                    st.error("❌ Error generating Word document. Please try again.")
+                    
+                    # Fallback to text-only version
+                    st.write("**📋 Text Version Available:**")
+                    formatted_report = f"""CAUSE NO. {cause_number}
+
+IN RE:
+
+{factoring_company}
+
+{courthouse}
+
+{report_title}
+
+{sources_consulted}
+
+{facts_section}
+
+{valuation_section}
+
+Respectfully submitted,
+
+/s/ Joseph W. Tombs
+Joseph W. Tombs
+TOMBS MAXWELL, LLP
+State Bar No. 20116250
+7021 Kewanee Ave. 7-102
+Lubbock, TX 79424
+Office (806) 698-1122
+Tombs@tombsmaxwell.com"""
+                    
+                    st.text_area(
+                        "Formatted Report Text", 
+                        formatted_report, 
+                        height=400, 
+                        key="formatted_report_fallback"
+                    )========================
     # FINANCIAL CALCULATION FUNCTIONS
     # (DO NOT TOUCH THIS SECTION - WORKING FINANCIAL CODE)
     # ==========================================
@@ -237,677 +1225,369 @@ if check_password():
         
         amounts = [payment_amount] * num_payments
         return dates, amounts
-    
-    
+
     # ==========================================
-    # REPORT GENERATION FUNCTIONS
-    # (WORK ON THIS SECTION FOR REPORT FEATURES)
+    # WORD DOCUMENT GENERATION FUNCTIONS
+    # (RESTORED FROM OLD CODE)
     # ==========================================
-    
-    def get_report_template_options():
+
+    def format_title_case_with_ordinals(text):
         """
-        Return the available report template options
+        Format text to proper title case with special handling for ordinals and small words
         """
-        return [
-            "Libertarian Approach - Recommend", 
-            "Beginning Slippery Slope - Hesitantly Recommend", 
-            "Negative - Do Not Recommend", 
-            "Life-Contingent Payments - Never Recommend"
-        ]
-    
-    def generate_libertarian_approach_report(cause_number, factoring_company, courthouse, payee_name, application_title, formatted_exhibits, prior_sentence, facts_paragraph=""):
-        """
-        Generate the 'Libertarian Approach - Recommend' template report
-        This is the original template that was already built
-        """
-        # Build the facts section if provided
-        facts_section = ""
-        if facts_paragraph.strip():
-            facts_section = f"""
-    
-    **FACTS:**
-    
-    {facts_paragraph}"""
+        if not text:
+            return text
         
-        report = f"""CAUSE NO. {cause_number}
-    
-    **IN RE:**
-    
-    **{payee_name}**
-    
-    **{courthouse}**
-    
-    **REPORT OF GUARDIAN AD LITEM**
-    
-    This report, as requested by the Court, analyzes the circumstances of the proposed transfer of structured settlement payment rights by and between {payee_name} ("the Payee"), and {factoring_company} ("the Transferee") and the proposed Transferee's compliance with Chapter 141 of the Civil Practice and Remedies Code.
-    
-    **SOURCES CONSULTED:**
-    
-    I received an unredacted copy of the {application_title.title()}, which included as Exhibits: {formatted_exhibits}. {prior_sentence}{facts_section}"""
+        # Define words that should remain lowercase (except when first word)
+        small_words = {
+            'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 
+            'on', 'or', 'so', 'the', 'to', 'up', 'yet', 'with', 'from', 'into', 
+            'onto', 'per', 'upon', 'via'
+        }
         
-        return report
-    
-    def generate_paragraph_2_from_financial_data():
-        """
-        Generate paragraph 2 using financial data from session state
-        Handles both single payment and multi-group scenarios
-        """
-        if not st.session_state.get('financial_complete', False):
-            return ""
+        # Define ordinal patterns and their replacements
+        ordinal_replacements = {
+            '1st': '1ˢᵗ',
+            '2nd': '2ⁿᵈ', 
+            '3rd': '3ʳᵈ',
+            '4th': '4ᵗʰ',
+            '5th': '5ᵗʰ',
+            '6th': '6ᵗʰ',
+            '7th': '7ᵗʰ',
+            '8th': '8ᵗʰ',
+            '9th': '9ᵗʰ',
+            '10th': '10ᵗʰ'
+        }
         
-        num_groups = st.session_state.get('num_groups', 1)
-        total_aggregate = st.session_state.get('total_aggregate', 0)
-        purchase_price = st.session_state.get('purchase_price', 0)
+        words = text.split()
+        formatted_words = []
         
-        # Single payment scenario
-        if num_groups == 1:
-            # Get the single payment date
-            all_payment_dates = st.session_state.get('all_payment_dates', [])
-            if all_payment_dates:
-                first_payment_date = all_payment_dates[0].strftime('%B %d, %Y')
-                return f"The Payee is seeking to sell a lump sum payment in the amount of ${total_aggregate:,.2f} due on {first_payment_date} in exchange for a present lump sum payment of ${purchase_price:,.2f}."
-            else:
-                return f"The Payee is seeking to sell a lump sum payment in the amount of ${total_aggregate:,.2f} in exchange for a present lump sum payment of ${purchase_price:,.2f}."
-        
-        # Multi-group scenario
-        else:
-            payment_descriptions = []
-            total_payments = 0
+        for i, word in enumerate(words):
+            # Remove punctuation for processing but remember it
+            clean_word = word.strip('.,!?;:()[]{}"\'-')
+            punctuation = word[len(clean_word):] if len(word) > len(clean_word) else ''
             
-            for group_num in range(num_groups):
-                # Get group data from session state
-                num_payments = st.session_state.get(f"financial_payments_{group_num}", 1)
-                payment_amount = st.session_state.get(f"financial_amount_{group_num}", 0)
-                
-                # Get frequency
-                if num_payments > 1:
-                    frequency = st.session_state.get(f"financial_frequency_{group_num}", "Monthly")
-                    frequency_text = frequency.lower()
+            # Check for ordinals first
+            ordinal_found = False
+            for ordinal, replacement in ordinal_replacements.items():
+                if clean_word.lower() == ordinal.lower():
+                    formatted_words.append(replacement + punctuation)
+                    ordinal_found = True
+                    break
+            
+            if not ordinal_found:
+                # Apply title case rules
+                if i == 0:  # First word is always capitalized
+                    formatted_words.append(clean_word.capitalize() + punctuation)
+                elif clean_word.lower() in small_words:
+                    formatted_words.append(clean_word.lower() + punctuation)
                 else:
-                    frequency_text = "lump sum"
-                
-                # Get dates
-                first_date = st.session_state.get(f"financial_first_date_{group_num}")
-                last_date = st.session_state.get(f"financial_last_date_{group_num}")
-                
-                if first_date and last_date:
-                    first_date_str = first_date.strftime('%B %d, %Y')
-                    last_date_str = last_date.strftime('%B %d, %Y')
-                    
-                    if num_payments == 1:
-                        description = f"a lump sum payment of ${payment_amount:,.2f} due on {first_date_str}"
-                    elif first_date == last_date:
-                        description = f"{num_payments} {frequency_text} payments of ${payment_amount:,.2f} each due on {first_date_str}"
-                    else:
-                        description = f"{num_payments} {frequency_text} payments of ${payment_amount:,.2f} each beginning on {first_date_str} and continuing through {last_date_str}"
-                    
-                    payment_descriptions.append(description)
-                    total_payments += num_payments
-            
-            # Combine descriptions with proper grammar
-            if len(payment_descriptions) == 1:
-                combined_descriptions = payment_descriptions[0]
-            elif len(payment_descriptions) == 2:
-                combined_descriptions = f"{payment_descriptions[0]} and {payment_descriptions[1]}"
-            else:
-                combined_descriptions = "; ".join(payment_descriptions[:-1]) + f"; and {payment_descriptions[-1]}"
-            
-            return f"The Payee is seeking to sell {combined_descriptions}. These {total_payments} payments aggregate to an amount of ${total_aggregate:,.2f}. In exchange, it is proposed that the Payee receive a single lump-sum payment of ${purchase_price:,.2f}."
-    
-    def format_exhibits_list(exhibits):
+                    formatted_words.append(clean_word.capitalize() + punctuation)
+        
+        return ' '.join(formatted_words)
+
+    def create_tombs_maxwell_template(cause_number, factoring_company, courthouse, 
+                                    report_title, sources_consulted, facts_section, 
+                                    valuation_section):
         """
-        Format the exhibits list with proper articles (a/an) and conjunctions
-        Converts all exhibits to title case for proper formatting
+        Create Word document using the Tombs Maxwell template structure
         """
-        if not exhibits:
-            return ""
+        doc = Document()
         
-        if len(exhibits) == 1:
-            exhibit = exhibits[0].strip().title()
-            if exhibit.lower()[0] in 'aeiou':
-                return f"an {exhibit}"
-            else:
-                return f"a {exhibit}"
+        # Set document margins
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Inches(1)
+            section.bottom_margin = Inches(1)
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
         
-        formatted_exhibits = []
-        for i, exhibit in enumerate(exhibits):
-            exhibit = exhibit.strip().title()
-            if not exhibit:
-                continue
-                
-            if i == len(exhibits) - 1:  # Last exhibit
-                if exhibit.lower()[0] in 'aeiou':
-                    formatted_exhibits.append(f"and an {exhibit}")
-                else:
-                    formatted_exhibits.append(f"and a {exhibit}")
-            else:
-                if exhibit.lower()[0] in 'aeiou':
-                    formatted_exhibits.append(f"an {exhibit}")
-                else:
-                    formatted_exhibits.append(f"a {exhibit}")
+        # Set default font for the document
+        style = doc.styles['Normal']
+        font = style.font
+        font.name = 'Book Antiqua'
+        font.size = Pt(12)
         
-        if len(formatted_exhibits) == 1:
-            return formatted_exhibits[0]
-        else:
-            return "; ".join(formatted_exhibits[:-1]) + "; " + formatted_exhibits[-1]
-    
-    
-    # ==========================================
-    # STREAMLIT APP INTERFACE
-    # (MAIN APP STRUCTURE - SAFE TO MODIFY LAYOUT)
-    # ==========================================
-    
-    # Streamlit App
-    st.title("🏦 Amicus Law Offices, LLC")
-    
-    # Add tabs for Financial Analysis and Report Creation (reordered)
-    tab1, tab2 = st.tabs(["💰 Financial Analysis", "📝 Report Creation"])
-    
-    with tab1:
-        st.header("Financial Analysis")
+        # Add cause number (bold, centered, uppercase, double-spaced)
+        cause_para = doc.add_paragraph()
+        cause_run = cause_para.add_run(f'CAUSE NO. {cause_number.upper()}')
+        cause_run.bold = True
+        cause_run.font.name = 'Book Antiqua'
+        cause_run.font.size = Pt(12)
+        cause_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cause_para.paragraph_format.line_spacing = 2.0  # Double spacing
         
-        # Step 1: Number of payment groups
-        st.subheader("Step 1: Select the number of payment groups")
-        st.markdown("*Example 1: if the client is selling 5 payments of \\$7,000 and 2 payments of \\$4,000, you would select '2' because there are two uneven groups.*\n\n*Example 2: if the client is selling 165 payments of \\$500, you would select '1' because it is one large group of equal payments.*")
-        num_groups = st.number_input("How many different payment groups are you selling?", min_value=1, value=1, step=1, key="financial_num_groups")
-    
-        # Collect data for each group
-        all_payment_dates = []
-        all_payment_amounts = []
-        total_aggregate = 0
-    
-        for group_num in range(num_groups):
-            if num_groups > 1:
-                st.write("---")
-                st.subheader(f"Group {group_num + 1} Details")
-            
-            step_offset = 1 if num_groups == 1 else 0
-            
-            st.write(f"**Step {2 + step_offset}: Payment Information - Group {group_num + 1}**")
-            num_payments = st.number_input(f"How many payments in group {group_num + 1}?", min_value=1, value=1, step=1, key=f"financial_payments_{group_num}")
-    
-            # Purchase date selection - only show for the first group
-            if group_num == 0:
-                st.write(f"**Step {3 + step_offset}: Purchase Date**")
-                use_today = st.radio("What date should be used for the purchase?", ["Today's date", "Different date"], key="financial_purchase_date_option")
-                
-                if use_today == "Today's date":
-                    purchase_date = datetime.combine(datetime.now().date(), datetime.min.time())
-                    st.write(f"**Purchase date: {purchase_date.strftime('%m/%d/%Y')}**")
-                else:
-                    custom_purchase_date = st.date_input(
-                        "Select the purchase date:",
-                        value=datetime.now().date(),
-                        min_value=datetime.now().date() - timedelta(days=365*10),
-                        max_value=datetime.now().date() + timedelta(days=365*10),
-                        key="financial_custom_purchase_date"
-                    )
-                    purchase_date = datetime.combine(custom_purchase_date, datetime.min.time())
-                    st.write(f"**Purchase date: {purchase_date.strftime('%m/%d/%Y')}**")
-                
-                # Update step numbers for subsequent steps
-                step_offset += 1
-    
-            if num_payments > 1:
-                st.write(f"**Step {3 + step_offset}: Payment Frequency - Group {group_num + 1}**")
-                payment_frequency = st.radio(f"Are these annual or monthly payments?", ["Monthly", "Annual"], key=f"financial_frequency_{group_num}")
-                is_monthly = payment_frequency == "Monthly"
-            else:
-                is_monthly = False
-    
-            st.write(f"**Step {4 + step_offset}: Payment Amount - Group {group_num + 1}**")
-            payment_amount = st.number_input(f"How much is each payment in group {group_num + 1}?", min_value=0.01, value=10000.00, step=100.00, format="%.2f", key=f"financial_amount_{group_num}")
-    
-            group_aggregate = num_payments * payment_amount
-            total_aggregate += group_aggregate
-            
-            st.write(f"**Group {group_num + 1} aggregate: \\${group_aggregate:,.2f}** ({num_payments}  payments × \\${payment_amount:,.2f} each)")
-    
-            st.write(f"**Step {5 + step_offset}: Payment Dates - Group {group_num + 1}**")
-            first_payment_date = st.date_input(f"When will the first payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=30), min_value=datetime.now().date(), max_value=datetime.now().date() + timedelta(days=365*50), key=f"financial_first_date_{group_num}")
-    
-            if num_payments > 1:
-                last_payment_date = st.date_input(f"When will the last payment happen in group {group_num + 1}?", value=datetime.now().date() + timedelta(days=365), min_value=datetime.now().date(), max_value=datetime.now().date() + timedelta(days=365*50), key=f"financial_last_date_{group_num}")
-                if last_payment_date <= first_payment_date:
-                    st.error(f"Last payment date must be after first payment date in group {group_num + 1}!")
-                    st.stop()
-            else:
-                last_payment_date = first_payment_date
-    
-            group_dates, group_amounts = generate_payment_schedule(num_payments, payment_amount, datetime.combine(first_payment_date, datetime.min.time()), datetime.combine(last_payment_date, datetime.min.time()), is_monthly)
-            
-            all_payment_dates.extend(group_dates)
-            all_payment_amounts.extend(group_amounts)
-    
-        # Overall verification step
-        st.write("---")
-        st.subheader("⚠️ Overall Verification Step")
-        st.write(f"**The total aggregate of ALL payments is ${total_aggregate:,.2f}**")
-        if num_groups > 1:
-            st.write("**Breakdown by group:**")
-            for group_num in range(num_groups):
-                num_payments_group = st.session_state.get(f"financial_payments_{group_num}", 1)
-                amount_group = st.session_state.get(f"financial_amount_{group_num}", 10000.0)
-                group_total = num_payments_group * amount_group
-                st.write(f"• Group {group_num + 1}: {num_payments_group} payments × \\${amount_group:,.2f} = \\${group_total:,.2f}")
-    
-        aggregate_correct = st.radio("Is this total aggregate amount correct?", ["Select an option", "Yes, this is correct", "No, I need to update my numbers"], key="financial_aggregate_check")
-    
-        if aggregate_correct == "No, I need to update my numbers":
-            st.warning("Please update your numbers above and check again.")
-            st.stop()
-        elif aggregate_correct == "Select an option":
-            st.info("Please confirm if the total aggregate amount is correct before continuing.")
-            st.stop()
-        elif aggregate_correct == "Yes, this is correct":
-            st.success("Great! Let's continue with the purchase price.")
-    
-        # Purchase price
-        final_step = 7 if num_groups == 1 else 3 + num_groups * 4
-        st.subheader(f"Step {final_step}: Purchase Price")
-        purchase_price = st.number_input("How much is the factoring company buying ALL the payments for?", min_value=0.01, value=float(total_aggregate * 0.85), step=100.00, format="%.2f", key="financial_purchase_price")
-    
-        # Competitor analysis settings
-        st.subheader(f"Step {final_step + 1}: Competitor Analysis")
-        st.write("For competitor quote calculation, we need to set a target profit to determine competitive pricing.")
-        use_default_target_profit = st.radio(
-            "What target profit should we use for competitor quote calculation?", 
-            ["Use $2,500 (default)", "Specify a different target profit"],
-            key="financial_target_profit_choice"
-        )
-    
-        if use_default_target_profit == "Use $2,500 (default)":
-            target_profit = 2500
-            st.write("**Using target profit: $2,500**")
-        else:
-            target_profit = st.number_input(
-                "Enter the target profit amount:", 
-                min_value=0.0, 
-                value=2500.0, 
-                step=100.0, 
-                format="%.2f",
-                key="financial_custom_target_profit"
-            )
-            st.write(f"**Using target profit: ${target_profit:,.2f}**")
-    
-        st.subheader("📊 Results & Analysis")
-    
-        # Sort all payments by date
-        sorted_payment_pairs = sorted(zip(all_payment_dates, all_payment_amounts))
-        payment_dates = [pair[0] for pair in sorted_payment_pairs]
-        payment_amounts = [pair[1] for pair in sorted_payment_pairs]
-    
-        # Use the selected purchase date (either today or custom)
-        cashflows = [-purchase_price] + payment_amounts
-        dates = [purchase_date] + payment_dates
-    
-        irr_rate = xirr(cashflows, dates)
-    
-        if irr_rate is not None:
-            # Calculate duration
-            duration_years = calculate_duration(payment_dates, payment_amounts, purchase_date, irr_rate)
-            
-            # Determine which treasury bounds we need for the duration
-            lower_bound, upper_bound = find_treasury_bounds(duration_years)
-            
-            # Display duration and treasury requirements
-            st.write("---")
-            st.subheader("🏛️ Treasury Rate Input Required")
-            st.subheader(f"Duration: {duration_years:.2f} years")
-            st.write(f"**Purchase date used: {purchase_date.strftime('%m/%d/%Y')}**")
-            
-            # Get series information for the bounds
-            lower_series_info = get_treasury_series_info(lower_bound)
-            upper_series_info = get_treasury_series_info(upper_bound)
-            
-            if lower_bound == upper_bound:
-                st.write(f"**Need: {lower_series_info['display_name']} treasury rate** (duration ≥ 30 years, capped)")
-                st.write(f"📄 **Get the current rate from:** https://fred.stlouisfed.org/series/{lower_series_info['series_id']}")
-                
-                # Single rate input
-                manual_rate = st.number_input(
-                    f"{lower_series_info['display_name']} Treasury Rate (%)",
-                    min_value=0.0,
-                    max_value=20.0,
-                    value=4.0,
-                    step=0.01,
-                    format="%.2f",
-                    help=f"Enter the most recent rate from the FRED page above",
-                    key="financial_single_treasury_rate"
-                )
-                lower_rate = upper_rate = manual_rate / 100.0
-                
-            else:
-                st.write(f"**Need: {lower_series_info['display_name']} and {upper_series_info['display_name']} treasury rates** for interpolation")
-                st.write(f"📄 **Get the current rates from:**")
-                st.write(f"• **{lower_series_info['display_name']}:** https://fred.stlouisfed.org/series/{lower_series_info['series_id']}")
-                st.write(f"• **{upper_series_info['display_name']}:** https://fred.stlouisfed.org/series/{upper_series_info['series_id']}")
-                
-                # Two rate inputs
-                col1, col2 = st.columns(2)
-                with col1:
-                    manual_lower = st.number_input(
-                        f"{lower_series_info['display_name']} Treasury Rate (%)",
-                        min_value=0.0,
-                        max_value=20.0,
-                        value=4.0,
-                        step=0.01,
-                        format="%.2f",
-                        help=f"Enter the most recent rate from the FRED page above",
-                        key="financial_lower_treasury_rate"
-                    )
-                with col2:
-                    manual_upper = st.number_input(
-                        f"{upper_series_info['display_name']} Treasury Rate (%)",
-                        min_value=0.0,
-                        max_value=20.0,
-                        value=4.2,
-                        step=0.01,
-                        format="%.2f",
-                        help=f"Enter the most recent rate from the FRED page above",
-                        key="financial_upper_treasury_rate"
-                    )
-                
-                lower_rate = manual_lower / 100.0
-                upper_rate = manual_upper / 100.0
-            
-            # Spread input
-            st.write("**📊 Spread Configuration**")
-            use_default_spread = st.radio(
-                "Would you like to use the default spread of 3.0%?", 
-                ["Yes, use 3.0%", "No, I want to specify a different spread"],
-                key="financial_spread_choice"
-            )
-            
-            if use_default_spread == "Yes, use 3.0%":
-                spread = 0.03
-                st.write("**Using default spread: 3.0%**")
-            else:
-                spread_percentage = st.number_input(
-                    "Enter the spread percentage:", 
-                    min_value=0.0, 
-                    max_value=10.0,
-                    value=3.0, 
-                    step=0.1, 
-                    format="%.1f",
-                    key="financial_custom_spread"
-                )
-                spread = spread_percentage / 100.0
-                st.write(f"**Using custom spread: {spread_percentage:.1f}%**")
-            
-            # Calculate Excel discount rate using treasury rates and spread
-            excel_discount_rate = calculate_excel_discount_rate(duration_years, lower_bound, upper_bound, lower_rate, upper_rate, spread)
-            
-            # Calculate wholesale price, profit, and competitor analysis
-            total_payments = sum(payment_amounts)
-            wholesale_price = calculate_wholesale_price(purchase_price, duration_years, total_payments, payment_dates, payment_amounts, purchase_date, excel_discount_rate)
-            profit = calculate_profit(wholesale_price, purchase_price)
-            competitor_quote = calculate_competitor_quote(purchase_price, profit, target_profit)
-            
-            # Calculate the profit if we match competitor's quote
-            competitor_profit = calculate_profit(wholesale_price, competitor_quote)
-            
-            # Calculate XIRR for competitive scenario
-            competitive_cashflows = [-competitor_quote] + payment_amounts
-            competitive_dates = [purchase_date] + payment_dates
-            competitive_irr = xirr(competitive_cashflows, competitive_dates)
-            
-            # Financial summary - Updated format
-            st.write("**📈 Profit Analysis**")
-            
-            # Side-by-side profit calculations
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**💰 Factoring Company**")
-                st.code(f"""
-    Wholesale Price:       ${wholesale_price:,.2f}
-    Less Purchase Price:  -${purchase_price:,.2f}
-    Less Legal Costs:     -$6,000.00
-                          ________________
-    Profit:                ${profit:,.2f}
-                """)
-                st.markdown(f"""
-                <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
-                    <div style="font-size: 14px; color: #666;">Factoring Company Discount Rate</div>
-                    <div style="font-size: 24px; font-weight: bold; color: #333;">{irr_rate:.2%}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.write("**🏢 Competitive Analysis**")
-                competitive_irr_display = f"{competitive_irr:.2%}" if competitive_irr is not None else "N/A"
-                st.code(f"""
-    Wholesale Price:         ${wholesale_price:,.2f}
-    Less Competitive Quote: -${competitor_quote:,.2f}
-    Less Legal Costs:       -$6,000.00
-                          ________________
-    Profit:                ${competitor_profit:,.2f}
-                """)
-                st.markdown(f"""
-                <div style="text-align: right; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f2f6;">
-                    <div style="font-size: 14px; color: #666;">Competitive Quote Discount Rate</div>
-                    <div style="font-size: 24px; font-weight: bold; color: #333;">{competitive_irr_display}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Payment schedule
-            st.write("**📅 Payment Schedule**")
-            df = pd.DataFrame({
-                'Payment Date': [d.strftime('%m/%d/%Y') for d in payment_dates], 
-                'Payment Amount': [f"${amount:,.2f}" for amount in payment_amounts]
-            })
-            st.dataframe(df, hide_index=True)
-            
-            # Store financial data in session state for report creation
-            st.session_state['financial_complete'] = True
-            st.session_state['num_groups'] = num_groups
-            st.session_state['total_aggregate'] = total_aggregate
-            st.session_state['purchase_price'] = purchase_price
-            st.session_state['all_payment_dates'] = all_payment_dates
-            st.session_state['all_payment_amounts'] = all_payment_amounts
-            
-            # Detailed calculations (expandable)
-            with st.expander("🔬 Detailed Calculations"):
-                st.write("**Duration Calculation Details:**")
-                duration_details = []
-                total_pv = 0
-                total_time_weighted_pv = 0
-                
-                for i, (payment_date, payment_amount) in enumerate(zip(payment_dates, payment_amounts)):
-                    years = (payment_date - purchase_date).days / 365.0
-                    pv = payment_amount / ((1 + irr_rate) ** years)
-                    time_weighted_pv = pv * years
-                    
-                    total_pv += pv
-                    total_time_weighted_pv += time_weighted_pv
-                    
-                    duration_details.append({
-                        'Payment #': i + 1,
-                        'Date': payment_date.strftime('%m/%d/%Y'),
-                        'Years': f"{years:.3f}",
-                        'Payment Amount': f"${payment_amount:,.2f}",
-                        'Present Value': f"${pv:,.2f}",
-                        'PV × Years': f"${time_weighted_pv:,.2f}"
-                    })
-                
-                duration_df = pd.DataFrame(duration_details)
-                st.dataframe(duration_df, hide_index=True)
-                
-                st.write(f"**Duration = ${total_time_weighted_pv:,.2f} ÷ ${total_pv:,.2f} = {duration_years:.6f} years**")
-                
-                # Calculate the XNPV components for display using Excel's discount rate and actual payments
-                xnpv_initial = -purchase_price
-                xnpv_payments = 0
-                
-                for payment_date, payment_amount in zip(payment_dates, payment_amounts):
-                    days_diff = (payment_date - purchase_date).days
-                    years_diff = days_diff / 365.0
-                    if years_diff >= 0:
-                        pv = payment_amount / ((1 + excel_discount_rate) ** years_diff)
-                        xnpv_payments += pv
-                
-                xnpv_value = xnpv_initial + xnpv_payments
-                
-                st.write("**Financial Calculations:**")
-                st.code(f"""
-    Total Payments: ${total_payments:,.2f}
-    Purchase Price: ${purchase_price:,.2f}
-    Duration: {duration_years:.3f} years
-    Number of Payments: {len(payment_dates)}
-    
-    Treasury Rates Used:
-      Lower Bound ({lower_bound}Y): {lower_rate:.4f} ({lower_rate:.2%})
-      Upper Bound ({upper_bound}Y): {upper_rate:.4f} ({upper_rate:.2%})
-    
-    Excel Discount Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
-    (Formula: ((Duration-{lower_bound})/({upper_bound}-{lower_bound})*({upper_rate:.4f}-{lower_rate:.4f}))+{lower_rate:.4f}+{spread:.3f})
-    
-    Spread Used: {spread:.1%}
-    
-    XNPV Calculation (using actual payment schedule):
-      PV of initial outflow: ${xnpv_initial:,.2f}
-      PV of all payments: ${xnpv_payments:,.2f}
-      XNPV Total: ${xnpv_value:,.2f}
-    
-    Wholesale Price: ${wholesale_price:,.2f} (Purchase Price + XNPV)
-    Competitor Quote: ${competitor_quote:,.2f}
-    Target Profit Used: ${target_profit:,.2f}
-                """)
-    
-            # Navigation guidance
-            st.write("---")
-            st.write("### ✅ Financial Analysis Complete!")
-            st.write("Ready to create your Guardian Ad Litem report? Click the **📝 Report Creation** tab above to continue.")
-    
-        else:
-            st.error("Could not calculate XIRR. Please check your inputs.")
-    
-    with tab2:
-        st.header("Report Creation")
-        st.write("Complete the following information to generate your Guardian Ad Litem report:")
+        # Create IN RE table structure (2x1 table with thick center border)
+        table = doc.add_table(rows=1, cols=2)
         
-        # Check if financial analysis is complete
-        if not st.session_state.get('financial_complete', False):
-            st.warning("⚠️ Please complete the **💰 Financial Analysis** tab first to auto-populate payment details.")
-            st.info("👈 Click the **Financial Analysis** tab to get started!")
-            st.stop()
-        
-        # Template selection
-        st.subheader("Template Selection")
-        template_options = get_report_template_options()
-        selected_template = st.selectbox(
-            "Which report template would you like to use?", 
-            template_options,
-            index=0  # Default to "Libertarian Approach - Recommend"
-        )
-        st.write(f"**Selected template:** {selected_template}")
-        
-        # Basic case information
-        st.subheader("Case Information")
-        cause_number = st.text_input("What is the cause number?", value="", key="report_cause_number")
-        factoring_company = st.text_input("What is the factoring company's name on the application?", value="", key="report_factoring_company")
-        courthouse = st.text_input("What is the court, number, county, state on the application?", value="", key="report_courthouse")
-        payee_name = st.text_input("What is the Payee name on the application?", value="", key="report_payee_name")
-        application_title = st.text_input("What is the title of the application?", value="", key="report_application_title")
-        
-        # Exhibits section
-        st.subheader("Exhibits")
-        num_exhibits = st.number_input("How many exhibits were in the application?", min_value=1, value=1, step=1, key="report_num_exhibits")
-        
-        exhibits = []
-        for i in range(num_exhibits):
-            exhibit = st.text_input(f"Exhibit {i+1} - Copy/paste the exact name:", key=f"report_exhibit_{i}", value="")
-            if exhibit.strip():
-                exhibits.append(exhibit.strip())
-        
-        # Prior appointments section
-        st.subheader("Prior Appointments")
-        prior_appointment = st.radio("Have we been appointed guardian ad litem for this client before?", ["No", "Yes"], key="report_prior_appointment")
-        
-        prior_times = 0
-        if prior_appointment == "Yes":
-            prior_times = st.number_input("How many times before?", min_value=1, value=1, step=1, key="report_prior_times")
-        
-        # Facts section - NEW for Libertarian template
-        if selected_template == "Libertarian Approach - Recommend":
-            st.subheader("Facts Section")
+        # Remove all borders first, then add THINNER center border
+        def set_table_borders(table):
+            # Remove all borders first
+            tbl = table._tbl
+            for cell in table._cells:
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.first_child_found_in("w:tcBorders")
+                if tcBorders is not None:
+                    tcPr.remove(tcBorders)
             
-            # Paragraph 1 - Simple copy/paste from Nick's call
-            st.write("**Paragraph 1 - Client Phone Call Notes:**")
-            st.write("Copy and paste what Nick found in his call with the client:")
-            
-            paragraph_1 = st.text_area(
-                "Paragraph 1 content:",
-                height=120,
-                placeholder="Paste Nick's notes about the phone call with the client here...",
-                key="report_paragraph_1"
-            )
-            
-            # Paragraph 2 - Auto-generated from financial data
-            st.write("**Paragraph 2 - Payment Details (Auto-Generated):**")
-            
-            # Generate paragraph 2 from financial data
-            paragraph_2 = generate_paragraph_2_from_financial_data()
-            
-            if paragraph_2:
-                st.success("Generated from your Financial Analysis data:")
-                st.write(paragraph_2)
-            else:
-                st.warning("No financial data found. Please complete Financial Analysis first.")
-                paragraph_2 = ""
-            
-            # Combine paragraphs for final facts section
-            final_facts_paragraph = ""
-            if paragraph_1.strip():
-                final_facts_paragraph += paragraph_1.strip()
-            if paragraph_2.strip():
-                if final_facts_paragraph:
-                    final_facts_paragraph += "\n\n" + paragraph_2.strip()
-                else:
-                    final_facts_paragraph = paragraph_2.strip()
-                    
-        else:
-            final_facts_paragraph = ""  # Other templates don't have this feature yet
+            # Add THINNER center vertical border (sz="18" was at "24")
+            left_cell = table.cell(0, 0)
+            left_tc = left_cell._tc
+            left_tcPr = left_tc.get_or_add_tcPr()
+            left_tcBorders = parse_xml(r'<w:tcBorders %s><w:right w:val="single" w:sz="18" w:space="0" w:color="000000"/></w:tcBorders>' % nsdecls('w'))
+            left_tcPr.append(left_tcBorders)
         
-        # Generate report button
-        if st.button("Generate Report", key="report_generate_button"):
-            if all([cause_number, factoring_company, courthouse, payee_name, application_title]) and len(exhibits) == num_exhibits and all(exhibits):
-                # Format exhibits
-                formatted_exhibits = format_exhibits_list(exhibits)
-                
-                # Create prior appointment sentence
-                prior_sentence = ""
-                if prior_appointment == "Yes":
-                    if prior_times == 1:
-                        prior_sentence = f"A review of my files indicated that I had previously been appointed as Guardian Ad Litem for Payee in one prior case. "
-                    else:
-                        prior_sentence = f"A review of my files indicated that I previously had been appointed as Guardian Ad Litem for Payee in {prior_times} prior cases. "
-                
-                # Generate the appropriate report based on selected template
-                if selected_template == "Libertarian Approach - Recommend":
-                    report = generate_libertarian_approach_report(
-                        cause_number, factoring_company, courthouse, payee_name, 
-                        application_title, formatted_exhibits, prior_sentence, 
-                        final_facts_paragraph  # Pass the facts paragraph
-                    )
-                elif selected_template == "Beginning Slippery Slope - Hesitantly Recommend":
-                    # TODO: Add function for this template
-                    report = "Template not yet implemented - Beginning Slippery Slope"
-                elif selected_template == "Negative - Do Not Recommend":
-                    # TODO: Add function for this template
-                    report = "Template not yet implemented - Negative"
-                elif selected_template == "Life-Contingent Payments - Never Recommend":
-                    # TODO: Add function for this template
-                    report = "Template not yet implemented - Life-Contingent Payments"
-                else:
-                    report = "Unknown template selected"
-                
-                st.success("Report generated successfully!")
-                st.subheader("📋 Copy and paste the text below into Microsoft Word:")
-                
-                # Display the report in a text area for easy copying
-                st.text_area("Generated Report", report, height=400, key="report_final_output")
-                
-            else:
-                st.error("Please fill in all required fields and exhibit names before generating the report.")
+        set_table_borders(table)
+        table.style = None
+        
+        # Left cell - IN RE: and factoring company (single-spaced with line breaks)
+        in_re_cell = table.cell(0, 0)
+        in_re_para = in_re_cell.paragraphs[0]
+        in_re_para.clear()
+        
+        # Add "IN RE:" on first line
+        in_re_run = in_re_para.add_run('IN RE:')
+        in_re_run.bold = True
+        in_re_run.font.name = 'Book Antiqua'
+        in_re_run.font.size = Pt(12)
+        
+        # Add two line breaks and then factoring company
+        in_re_para.add_run('\n\n\n')  # Skip 2 lines (3 \n total)
+        
+        company_run = in_re_para.add_run(factoring_company.upper())  # Convert to uppercase
+        company_run.bold = True
+        company_run.font.name = 'Book Antiqua'
+        company_run.font.size = Pt(12)
+        
+        in_re_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        in_re_para.paragraph_format.line_spacing = 1.0  # Single spacing
+        
+        # Right cell - courthouse (double-spaced, LEFT JUSTIFIED with left margin indent)
+        courthouse_cell = table.cell(0, 1)
+        courthouse_para = courthouse_cell.paragraphs[0]
+        courthouse_para.clear()
+        
+        # Add courthouse text
+        courthouse_run = courthouse_para.add_run(courthouse.upper())  # Convert to uppercase
+        courthouse_run.bold = True
+        courthouse_run.font.name = 'Book Antiqua'
+        courthouse_run.font.size = Pt(12)
+        courthouse_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        courthouse_para.paragraph_format.line_spacing = 2.0  # Double spacing
+        courthouse_para.paragraph_format.left_indent = Inches(0.35)  # Indent whole block 5 spaces
+        
+        # Add ONE space after table before REPORT OF GUARDIAN AD LITEM (remove space after)
+        space_para = doc.add_paragraph()
+        space_para.paragraph_format.line_spacing = 2.0
+        space_para.paragraph_format.space_after = Pt(0)  # Remove space after paragraph
+        
+        # Add main heading with underline (double-spaced) - NO EXTRA SPACE BEFORE
+        heading_para = doc.add_paragraph()
+        heading_run = heading_para.add_run('REPORT OF GUARDIAN AD LITEM')
+        heading_run.bold = True  # Only this heading should be bold
+        heading_run.underline = True
+        heading_run.font.name = 'Book Antiqua'
+        heading_run.font.size = Pt(12)
+        heading_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        heading_para.paragraph_format.line_spacing = 2.0
+        
+        # Add report title section (if provided)
+        if report_title.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_title = report_title.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            title_paragraphs = cleaned_title.split('\n\n')
+            for title_para in title_paragraphs:
+                if title_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(title_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add SOURCES CONSULTED section (double-spaced, NOT BOLD, INDENTED)
+        sources_heading = doc.add_paragraph()
+        sources_run = sources_heading.add_run('SOURCES CONSULTED:')
+        sources_run.bold = False  # Remove bold
+        sources_run.underline = True
+        sources_run.font.name = 'Book Antiqua'
+        sources_run.font.size = Pt(12)
+        sources_heading.paragraph_format.line_spacing = 2.0
+        sources_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        sources_heading.paragraph_format.first_line_indent = Inches(0.5)  # Indent
+        
+        # Add sources paragraph (double-spaced, justified)
+        if sources_consulted.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_sources = sources_consulted.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            sources_paragraphs = cleaned_sources.split('\n\n')
+            for source_para in sources_paragraphs:
+                if source_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(source_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add FACTS section (double-spaced, NOT BOLD, INDENTED)
+        facts_heading = doc.add_paragraph()
+        facts_run = facts_heading.add_run('FACTS:')
+        facts_run.bold = False  # Remove bold
+        facts_run.underline = True
+        facts_run.font.name = 'Book Antiqua'
+        facts_run.font.size = Pt(12)
+        facts_heading.paragraph_format.line_spacing = 2.0
+        facts_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        facts_heading.paragraph_format.first_line_indent = Inches(0.5)  # Indent
+        
+        # Add facts paragraphs with indentation, double spacing, and justification
+        if facts_section.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_facts = facts_section.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            fact_paragraphs = cleaned_facts.split('\n\n')
+            for fact_para in fact_paragraphs:
+                if fact_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(fact_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add VALUATION and RECOMMENDATION section (double-spaced, NOT BOLD, INDENTED)
+        valuation_heading = doc.add_paragraph()
+        valuation_run = valuation_heading.add_run('VALUATION and RECOMMENDATION:')
+        valuation_run.bold = False  # Remove bold
+        valuation_run.underline = True
+        valuation_run.font.name = 'Book Antiqua'
+        valuation_run.font.size = Pt(12)
+        valuation_heading.paragraph_format.line_spacing = 2.0
+        valuation_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        valuation_heading.paragraph_format.first_line_indent = Inches(0.5)  # Indent
+        
+        # Add valuation paragraphs (double-spaced, justified)
+        if valuation_section.strip():
+            # Clean the text first - remove unwanted line breaks but preserve paragraph breaks
+            cleaned_valuation = valuation_section.replace('\\\n', ' ').replace('\n\n', '|||PARAGRAPH_BREAK|||').replace('\n', ' ').replace('|||PARAGRAPH_BREAK|||', '\n\n')
+            val_paragraphs = cleaned_valuation.split('\n\n')
+            for val_para in val_paragraphs:
+                if val_para.strip():
+                    # Further clean each paragraph
+                    clean_para = ' '.join(val_para.strip().split())
+                    para = doc.add_paragraph(clean_para)
+                    for run in para.runs:
+                        run.font.name = 'Book Antiqua'
+                        run.font.size = Pt(12)
+                    para.paragraph_format.first_line_indent = Inches(0.5)
+                    para.paragraph_format.line_spacing = 2.0
+                    para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY  # Justified
+        
+        # Add several spaces before signature (double-spaced)
+        space1 = doc.add_paragraph()
+        space1.paragraph_format.line_spacing = 2.0
+        
+        # Create a container paragraph for right-aligned signature table
+        container_para = doc.add_paragraph()
+        container_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        
+        # Add signature block table (no borders, positioned on right side, WIDER)
+        sig_table = doc.add_table(rows=3, cols=1)
+        
+        # Remove all borders from signature table
+        def remove_all_table_borders(table):
+            tbl = table._tbl
+            for cell in table._cells:
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.first_child_found_in("w:tcBorders")
+                if tcBorders is not None:
+                    tcPr.remove(tcBorders)
+        
+        remove_all_table_borders(sig_table)
+        sig_table.style = None
+        
+        # Position table to the right
+        sig_table.alignment = WD_TABLE_ALIGNMENT.RIGHT
+        
+        # Set table width WIDER to accommodate email address
+        sig_table.autofit = False
+        for column in sig_table.columns:
+            column.width = Inches(4.5)  # Increased from 3.5 to 4.5 inches for email
+        
+        # Move table to right by setting table properties
+        tbl = sig_table._tbl
+        tblPr = tbl.tblPr
+        # Add table positioning with wider width
+        tbl_pos = parse_xml(r'<w:tblW %s w:w="3240" w:type="dxa"/>' % nsdecls('w'))  # Increased width
+        tblPr.append(tbl_pos)
+        
+        # Add table justification to right
+        tbl_jc = parse_xml(r'<w:jc %s w:val="right"/>' % nsdecls('w'))
+        tblPr.append(tbl_jc)
+        
+        # First row - "Respectfully submitted" and signature (single-spaced for signature block)
+        first_row = sig_table.cell(0, 0)
+        first_para = first_row.paragraphs[0]
+        first_para.clear()
+        
+        # Add "Respectfully submitted," 
+        resp_run = first_para.add_run("Respectfully submitted,")
+        resp_run.font.name = 'Book Antiqua'
+        resp_run.font.size = Pt(12)
+        first_para.paragraph_format.line_spacing = 1.0
+        first_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        
+        # Add THREE line breaks (one more single spaced line)
+        first_para.add_run("\n\n\n")
+        
+        # Add signature with underline (NO space after - ensure no trailing space)
+        sig_run = first_para.add_run("/s/ Joseph W. Tombs")
+        sig_run.font.name = 'Book Antiqua'
+        sig_run.font.size = Pt(12)
+        sig_run.underline = True
+        
+        # Explicitly set space after paragraph to 0 to remove any trailing space
+        first_para.paragraph_format.space_after = Pt(0)
+        
+        # Second row - empty for spacing
+        empty_row = sig_table.cell(1, 0)
+        empty_row.paragraphs[0].paragraph_format.line_spacing = 1.0
+        
+        # Third row - contact information (single-spaced for signature block)
+        contact_cell = sig_table.cell(2, 0)
+        contact_para = contact_cell.paragraphs[0]
+        contact_para.clear()
+        
+        contact_text = """Joseph W. Tombs
+TOMBS MAXWELL, LLP
+State Bar No. 20116250
+7021 Kewanee Ave. 7-102
+Lubbock, TX 79424
+Office (806) 698-1122
+Tombs@tombsmaxwell.com"""
+        
+        contact_run = contact_para.add_run(contact_text)
+        contact_run.font.name = 'Book Antiqua'
+        contact_run.font.size = Pt(12)
+        contact_para.paragraph_format.line_spacing = 1.0
+        contact_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        
+        # Save to BytesIO object
+        doc_io = io.BytesIO()
+        doc.save(doc_io)
+        doc_io.seek(0)
+        
+        return doc_io
+
+    # ==================
