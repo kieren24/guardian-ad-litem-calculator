@@ -44,7 +44,206 @@ def check_password():
 
 # Only show the app if password is correct
 if check_password():
+# ==========================================
+    # FINANCIAL CALCULATION FUNCTIONS
+    # (DO NOT TOUCH THIS SECTION - WORKING FINANCIAL CODE)
+    # ==========================================
 
+    def xirr(cashflows, dates, guess=0.1):
+        sorted_pairs = sorted(zip(dates, cashflows))
+        dates = [pair[0] for pair in sorted_pairs]
+        cashflows = [pair[1] for pair in sorted_pairs]
+        
+        first_date = dates[0]
+        days = [(date - first_date).days for date in dates]
+        
+        def npv(rate):
+            return sum(cf / ((1 + rate) ** (day / 365.0)) for cf, day in zip(cashflows, days))
+        
+        low = -0.99
+        high = 10.0
+        
+        for _ in range(100):
+            mid = (low + high) / 2.0
+            npv_result = npv(mid)
+            
+            if abs(npv_result) < 1e-10:
+                return mid
+            elif npv_result > 0:
+                low = mid
+            else:
+                high = mid
+        
+        return mid
+    
+    def find_treasury_bounds(duration_years: float) -> Tuple[float, float]:
+        """
+        Find the appropriate treasury bounds for interpolation.
+        Available maturities: 0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30 years
+        For durations > 30 years, cap at 30-year rate (no extrapolation)
+        """
+        maturities = [0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30]
+        
+        # Cap at 30-year rate for long durations
+        if duration_years >= maturities[-1]:
+            return maturities[-1], maturities[-1]  # 30, 30 (will result in flat 30Y rate)
+        
+        # Handle very short durations
+        if duration_years <= maturities[0]:
+            return maturities[0], maturities[1]  # 0.25, 0.5
+        
+        # Find bounds where duration sits between two maturities
+        for i in range(len(maturities) - 1):
+            if maturities[i] <= duration_years <= maturities[i + 1]:
+                return maturities[i], maturities[i + 1]
+        
+        # Fallback (shouldn't happen)
+        return 5, 7
+    
+    def get_treasury_series_info(maturity: float) -> Dict[str, str]:
+        """
+        Get FRED series information for a given maturity.
+        Returns dict with series_id and display_name.
+        """
+        series_mapping = {
+            0.25: {"series_id": "DGS3MO", "display_name": "3-Month"},
+            0.5: {"series_id": "DGS6MO", "display_name": "6-Month"},
+            1: {"series_id": "DGS1", "display_name": "1-Year"},
+            2: {"series_id": "DGS2", "display_name": "2-Year"},
+            3: {"series_id": "DGS3", "display_name": "3-Year"},
+            5: {"series_id": "DGS5", "display_name": "5-Year"},
+            7: {"series_id": "DGS7", "display_name": "7-Year"},
+            10: {"series_id": "DGS10", "display_name": "10-Year"},
+            20: {"series_id": "DGS20", "display_name": "20-Year"},
+            30: {"series_id": "DGS30", "display_name": "30-Year"}
+        }
+        
+        return series_mapping.get(maturity, {"series_id": "Unknown", "display_name": "Unknown"})
+    
+    def calculate_duration(payment_dates, payment_amounts, purchase_date, discount_rate):
+        """
+        Calculate weighted average duration of payments.
+        Duration = Sum(PV × Years) / Sum(PV)
+        """
+        total_pv = 0
+        total_time_weighted_pv = 0
+        
+        for payment_date, payment_amount in zip(payment_dates, payment_amounts):
+            years = (payment_date - purchase_date).days / 365.0
+            pv = payment_amount / ((1 + discount_rate) ** years)
+            time_weighted_pv = pv * years
+            
+            total_pv += pv
+            total_time_weighted_pv += time_weighted_pv
+        
+        if total_pv > 0:
+            duration = total_time_weighted_pv / total_pv
+            return duration
+        else:
+            return 0
+    
+    def calculate_excel_discount_rate(duration_years, lower_bound, upper_bound, lower_rate, upper_rate, spread):
+        """
+        Calculate discount rate using Excel's formula with user-provided treasury rates and spread
+        Takes the actual bounds determined by find_treasury_bounds()
+        """
+        # Handle case where bounds are equal (duration >= 30 years)
+        if upper_bound == lower_bound:
+            # Use flat rate (no interpolation needed)
+            discount_rate = lower_rate + spread
+        else:
+            # Normal interpolation between bounds
+            discount_rate = ((duration_years - lower_bound) / (upper_bound - lower_bound) * (upper_rate - lower_rate)) + lower_rate + spread
+        
+        return discount_rate
+    
+    def calculate_wholesale_price(purchase_price, duration_years, total_payments, payment_dates, payment_amounts, purchase_date, excel_discount_rate):
+        """
+        Calculate wholesale price based on Excel formula in cell G5: C5+C13
+        Uses the actual payment schedule for XNPV calculation (not simplified two-cash-flow model)
+        Excel XNPV uses a 365-day year convention
+        """
+        if not payment_dates:
+            return purchase_price
+        
+        # XNPV calculation using all actual payments
+        # Cash flow 1: -purchase_price at time 0 (purchase date)
+        # Cash flows 2+: individual payment amounts at their respective dates
+        
+        xnpv_value = -purchase_price  # Initial outflow
+        
+        # Add present value of each individual payment
+        for payment_date, payment_amount in zip(payment_dates, payment_amounts):
+            days_diff = (payment_date - purchase_date).days
+            # Excel XNPV uses exact day count but 365-day year convention
+            years_diff = days_diff / 365.0
+            if years_diff >= 0:  # Only include future payments
+                pv = payment_amount / ((1 + excel_discount_rate) ** years_diff)
+                xnpv_value += pv
+        
+        # Wholesale price = Purchase price + XNPV
+        wholesale_price = purchase_price + xnpv_value
+        return wholesale_price
+    
+    def calculate_profit(wholesale_price, purchase_price, fixed_cost=6000):
+        """
+        Calculate profit based on Excel formula in cell G7: G5-C5-C15
+        G7 = Wholesale Price - Purchase Price - Fixed Cost
+        Fixed cost appears to be $6,000 based on Excel cell C15
+        """
+        profit = wholesale_price - purchase_price - fixed_cost
+        return profit
+    
+    def calculate_competitor_quote(purchase_price, profit, target_profit=2500):
+        """
+        Calculate competitor quote based on Excel formula in cell C14: CEILING(C5+(G7-2500),50)
+        This calculates what competitors might quote that would leave us with our target profit
+        """
+        import math
+        competitor_quote = math.ceil((purchase_price + (profit - target_profit)) / 50) * 50
+        return competitor_quote
+    
+    def generate_payment_schedule(num_payments, payment_amount, first_payment_date, last_payment_date, is_monthly):
+        if num_payments == 1:
+            return [first_payment_date], [payment_amount]
+        
+        dates = []
+        
+        if is_monthly:
+            current_date = first_payment_date
+            for i in range(num_payments):
+                if i == 0:
+                    dates.append(current_date)
+                else:
+                    if current_date.month == 12:
+                        next_month = current_date.replace(year=current_date.year + 1, month=1)
+                    else:
+                        next_month = current_date.replace(month=current_date.month + 1)
+                    try:
+                        dates.append(next_month)
+                        current_date = next_month
+                    except ValueError:
+                        last_day = calendar.monthrange(next_month.year, next_month.month)[1]
+                        next_month = next_month.replace(day=last_day)
+                        dates.append(next_month)
+                        current_date = next_month
+        else:
+            current_date = first_payment_date
+            for i in range(num_payments):
+                if i == 0:
+                    dates.append(current_date)
+                else:
+                    try:
+                        next_year = current_date.replace(year=current_date.year + 1)
+                        dates.append(next_year)
+                        current_date = next_year
+                    except ValueError:
+                        next_year = current_date.replace(year=current_date.year + 1, day=28)
+                        dates.append(next_year)
+                        current_date = next_year
+        
+        amounts = [payment_amount] * num_payments
+        return dates, amounts
     # ==========================================
     # STREAMLIT APP INTERFACE
     # (MAIN APP STRUCTURE - SAFE TO MODIFY LAYOUT)
@@ -1025,207 +1224,7 @@ Tombs@tombsmaxwell.com"""
                         formatted_report, 
                         height=400, 
                         key="formatted_report_fallback"
-                    )========================
-    # FINANCIAL CALCULATION FUNCTIONS
-    # (DO NOT TOUCH THIS SECTION - WORKING FINANCIAL CODE)
-    # ==========================================
-
-    def xirr(cashflows, dates, guess=0.1):
-        sorted_pairs = sorted(zip(dates, cashflows))
-        dates = [pair[0] for pair in sorted_pairs]
-        cashflows = [pair[1] for pair in sorted_pairs]
-        
-        first_date = dates[0]
-        days = [(date - first_date).days for date in dates]
-        
-        def npv(rate):
-            return sum(cf / ((1 + rate) ** (day / 365.0)) for cf, day in zip(cashflows, days))
-        
-        low = -0.99
-        high = 10.0
-        
-        for _ in range(100):
-            mid = (low + high) / 2.0
-            npv_result = npv(mid)
-            
-            if abs(npv_result) < 1e-10:
-                return mid
-            elif npv_result > 0:
-                low = mid
-            else:
-                high = mid
-        
-        return mid
-    
-    def find_treasury_bounds(duration_years: float) -> Tuple[float, float]:
-        """
-        Find the appropriate treasury bounds for interpolation.
-        Available maturities: 0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30 years
-        For durations > 30 years, cap at 30-year rate (no extrapolation)
-        """
-        maturities = [0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30]
-        
-        # Cap at 30-year rate for long durations
-        if duration_years >= maturities[-1]:
-            return maturities[-1], maturities[-1]  # 30, 30 (will result in flat 30Y rate)
-        
-        # Handle very short durations
-        if duration_years <= maturities[0]:
-            return maturities[0], maturities[1]  # 0.25, 0.5
-        
-        # Find bounds where duration sits between two maturities
-        for i in range(len(maturities) - 1):
-            if maturities[i] <= duration_years <= maturities[i + 1]:
-                return maturities[i], maturities[i + 1]
-        
-        # Fallback (shouldn't happen)
-        return 5, 7
-    
-    def get_treasury_series_info(maturity: float) -> Dict[str, str]:
-        """
-        Get FRED series information for a given maturity.
-        Returns dict with series_id and display_name.
-        """
-        series_mapping = {
-            0.25: {"series_id": "DGS3MO", "display_name": "3-Month"},
-            0.5: {"series_id": "DGS6MO", "display_name": "6-Month"},
-            1: {"series_id": "DGS1", "display_name": "1-Year"},
-            2: {"series_id": "DGS2", "display_name": "2-Year"},
-            3: {"series_id": "DGS3", "display_name": "3-Year"},
-            5: {"series_id": "DGS5", "display_name": "5-Year"},
-            7: {"series_id": "DGS7", "display_name": "7-Year"},
-            10: {"series_id": "DGS10", "display_name": "10-Year"},
-            20: {"series_id": "DGS20", "display_name": "20-Year"},
-            30: {"series_id": "DGS30", "display_name": "30-Year"}
-        }
-        
-        return series_mapping.get(maturity, {"series_id": "Unknown", "display_name": "Unknown"})
-    
-    def calculate_duration(payment_dates, payment_amounts, purchase_date, discount_rate):
-        """
-        Calculate weighted average duration of payments.
-        Duration = Sum(PV × Years) / Sum(PV)
-        """
-        total_pv = 0
-        total_time_weighted_pv = 0
-        
-        for payment_date, payment_amount in zip(payment_dates, payment_amounts):
-            years = (payment_date - purchase_date).days / 365.0
-            pv = payment_amount / ((1 + discount_rate) ** years)
-            time_weighted_pv = pv * years
-            
-            total_pv += pv
-            total_time_weighted_pv += time_weighted_pv
-        
-        if total_pv > 0:
-            duration = total_time_weighted_pv / total_pv
-            return duration
-        else:
-            return 0
-    
-    def calculate_excel_discount_rate(duration_years, lower_bound, upper_bound, lower_rate, upper_rate, spread):
-        """
-        Calculate discount rate using Excel's formula with user-provided treasury rates and spread
-        Takes the actual bounds determined by find_treasury_bounds()
-        """
-        # Handle case where bounds are equal (duration >= 30 years)
-        if upper_bound == lower_bound:
-            # Use flat rate (no interpolation needed)
-            discount_rate = lower_rate + spread
-        else:
-            # Normal interpolation between bounds
-            discount_rate = ((duration_years - lower_bound) / (upper_bound - lower_bound) * (upper_rate - lower_rate)) + lower_rate + spread
-        
-        return discount_rate
-    
-    def calculate_wholesale_price(purchase_price, duration_years, total_payments, payment_dates, payment_amounts, purchase_date, excel_discount_rate):
-        """
-        Calculate wholesale price based on Excel formula in cell G5: C5+C13
-        Uses the actual payment schedule for XNPV calculation (not simplified two-cash-flow model)
-        Excel XNPV uses a 365-day year convention
-        """
-        if not payment_dates:
-            return purchase_price
-        
-        # XNPV calculation using all actual payments
-        # Cash flow 1: -purchase_price at time 0 (purchase date)
-        # Cash flows 2+: individual payment amounts at their respective dates
-        
-        xnpv_value = -purchase_price  # Initial outflow
-        
-        # Add present value of each individual payment
-        for payment_date, payment_amount in zip(payment_dates, payment_amounts):
-            days_diff = (payment_date - purchase_date).days
-            # Excel XNPV uses exact day count but 365-day year convention
-            years_diff = days_diff / 365.0
-            if years_diff >= 0:  # Only include future payments
-                pv = payment_amount / ((1 + excel_discount_rate) ** years_diff)
-                xnpv_value += pv
-        
-        # Wholesale price = Purchase price + XNPV
-        wholesale_price = purchase_price + xnpv_value
-        return wholesale_price
-    
-    def calculate_profit(wholesale_price, purchase_price, fixed_cost=6000):
-        """
-        Calculate profit based on Excel formula in cell G7: G5-C5-C15
-        G7 = Wholesale Price - Purchase Price - Fixed Cost
-        Fixed cost appears to be $6,000 based on Excel cell C15
-        """
-        profit = wholesale_price - purchase_price - fixed_cost
-        return profit
-    
-    def calculate_competitor_quote(purchase_price, profit, target_profit=2500):
-        """
-        Calculate competitor quote based on Excel formula in cell C14: CEILING(C5+(G7-2500),50)
-        This calculates what competitors might quote that would leave us with our target profit
-        """
-        import math
-        competitor_quote = math.ceil((purchase_price + (profit - target_profit)) / 50) * 50
-        return competitor_quote
-    
-    def generate_payment_schedule(num_payments, payment_amount, first_payment_date, last_payment_date, is_monthly):
-        if num_payments == 1:
-            return [first_payment_date], [payment_amount]
-        
-        dates = []
-        
-        if is_monthly:
-            current_date = first_payment_date
-            for i in range(num_payments):
-                if i == 0:
-                    dates.append(current_date)
-                else:
-                    if current_date.month == 12:
-                        next_month = current_date.replace(year=current_date.year + 1, month=1)
-                    else:
-                        next_month = current_date.replace(month=current_date.month + 1)
-                    try:
-                        dates.append(next_month)
-                        current_date = next_month
-                    except ValueError:
-                        last_day = calendar.monthrange(next_month.year, next_month.month)[1]
-                        next_month = next_month.replace(day=last_day)
-                        dates.append(next_month)
-                        current_date = next_month
-        else:
-            current_date = first_payment_date
-            for i in range(num_payments):
-                if i == 0:
-                    dates.append(current_date)
-                else:
-                    try:
-                        next_year = current_date.replace(year=current_date.year + 1)
-                        dates.append(next_year)
-                        current_date = next_year
-                    except ValueError:
-                        next_year = current_date.replace(year=current_date.year + 1, day=28)
-                        dates.append(next_year)
-                        current_date = next_year
-        
-        amounts = [payment_amount] * num_payments
-        return dates, amounts
-
+                    )
     # ==========================================
     # WORD DOCUMENT GENERATION FUNCTIONS
     # (RESTORED FROM OLD CODE)
