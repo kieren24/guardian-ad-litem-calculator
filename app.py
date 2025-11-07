@@ -844,6 +844,9 @@ if check_password():
             "I don't know what my monthly expenses are"
         ])
         
+        # Default total_monthly_expenses to 0
+        total_monthly_expenses = 0.0
+        
         # Expense Tracking Based on Strategy
         if expense_strategy == "I track my expenses fairly carefully":
             total_monthly_expenses = st.number_input(
@@ -880,6 +883,27 @@ if check_password():
                 "More than $3,000": 3500
             }
             total_monthly_expenses = expense_range_mapping[expense_range]
+        
+        elif expense_strategy == "I don't know what my monthly expenses are":
+            st.write("""
+            It appears the annuitant is unsure about their monthly expenses. 
+            This lack of financial awareness may be an important observation 
+            for the Guardian Ad Litem report.
+            """)
+            
+            financial_awareness = st.radio(
+                "What best describes their understanding of their financial situation?", 
+                [
+                    "Completely unaware of monthly expenses",
+                    "Can provide very rough estimates",
+                    "Seems confused about financial details"
+                ]
+            )
+            
+            additional_context = st.text_area(
+                "Provide additional context about the annuitant's financial awareness:", 
+                placeholder="Note observations about their ability to discuss finances, any apparent challenges, or other relevant details for the report."
+            )
         
         # Calculate monthly income
         monthly_income_after_tax = 0
