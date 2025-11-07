@@ -707,7 +707,15 @@ if check_password():
         
         is_married = st.radio("Married:", ["Yes", "No"], key="is_married")
         if is_married == "Yes":
-            living_with_spouse = st.radio("Living with spouse:", ["Yes", "No"], key="living_with_spouse")
+        living_with_spouse = st.radio("Living with spouse:", ["Yes", "No"], key="living_with_spouse")
+    
+        # NEW CODE: Transaction Awareness Section
+        aware_of_transaction = st.radio("Are you aware of this transaction?", ["Yes", "No"], key="aware_of_transaction")
+    
+        if aware_of_transaction == "Yes":
+            agrees_with_transaction = st.radio("Do you agree with this transaction?", ["Yes", "No"], key="agrees_with_transaction")
+        if agrees_with_transaction == "No":
+            disagreement_reason = st.text_area("Please explain why you disagree:", key="disagreement_reason")
         
         has_minor_children = st.radio("Minor children:", ["Yes", "No"], key="has_minor_children")
         if has_minor_children == "Yes":
