@@ -751,9 +751,10 @@ if check_password():
         # Annuitant's Financial Situation Outside of Settlement
         st.subheader("Annuitant's Financial Situation Outside of Settlement")
         
-        education = st.radio("Education background:", [
+        education = st.radio("Highest level of education completed:", [
             "Did not complete high school",
             "GED",
+            "High School",
             "Certificate",
             "Some college",
             "Associates degree",
