@@ -953,12 +953,8 @@ if check_password():
         # Settlement Payments
         st.subheader("Settlement Payments")
         
-        contract_description = st.text_area("What is the contract for? (e.g., '200 monthly payments of $500 starting 1/1/2029...'):", key="contract_description")
-        lump_sum_amount = st.number_input("Lump sum dollar amount payable to annuitant from factoring company ($):", min_value=0.0, value=0.0, step=100.0, format="%.2f", key="lump_sum_amount")
-        payments_life_contingent = st.radio("Are these payments life contingent (do they have a beneficiary to receive money if they die)?", ["Yes", "No"], key="payments_life_contingent")
-        
         how_obtained_payments = st.text_area("How did you obtain these payments? (This is crucial for the report):", key="how_obtained_payments")
-        
+        initial_payment_details = st.text_area("Initial Amount of Payments (monthly or lump-sum? any aged out? what payments remaining and for how much?):", key="initial_payment_details")
         was_injured = st.radio("Was annuitant injured?", ["Yes", "No"], key="was_injured")
         if was_injured == "Yes":
             had_brain_damage = st.radio("Did they have any head or brain damage?", ["Yes", "No"], key="had_brain_damage")
@@ -967,16 +963,18 @@ if check_password():
             has_guardianship = st.radio("Do they have existing guardianship?", ["Yes", "No"], key="has_guardianship")
             mental_faculties_assessment = st.text_area("Your assessment of their mental faculties:", key="mental_faculties_assessment")
         
-        initial_payment_details = st.text_area("Initial Amount of Payments (monthly or lump-sum? any aged out? what payments remaining and for how much?):", key="initial_payment_details")
-        
         sold_payments_previously = st.radio("Has annuitant sold any payments previously?", ["Yes", "No"], key="sold_payments_previously")
         if sold_payments_previously == "Yes":
             previous_sales_count = st.text_area("How many times? (they often give a range):", key="previous_sales_count")
-        
+                
         st.write("---")
         
         # Purpose of the Sale
         st.subheader("Purpose of the Sale")
+        
+        contract_description = st.text_area("What is the contract for? (e.g., '200 monthly payments of $500 starting 1/1/2029...'):", key="contract_description")
+        lump_sum_amount = st.number_input("Lump sum dollar amount payable to annuitant from factoring company ($):", min_value=0.0, value=0.0, step=100.0, format="%.2f", key="lump_sum_amount")
+        payments_life_contingent = st.radio("Are these payments life contingent (do they have a beneficiary to receive money if they die)?", ["Yes", "No"], key="payments_life_contingent")
         
         rationale_for_sale = st.text_area("Rationale for selling payments:", key="rationale_for_sale")
         
