@@ -705,18 +705,24 @@ if check_password():
         # Annuitant Living Arrangements
         st.subheader("Annuitant Living Arrangements")
         
+        
         is_married = st.radio("Married:", ["Yes", "No"], key="is_married")
+        
         if is_married == "Yes":
             living_with_spouse = st.radio("Living with spouse:", ["Yes", "No"], key="living_with_spouse")
-            
-            # NEW CODE: Transaction Awareness Section (only appears if married is Yes)
+        
+            # Transaction Awareness Section
             spouse_aware_of_transaction = st.radio("Is your spouse aware of this transaction?", ["Yes", "No"], key="spouse_aware_of_transaction")
-            
+        
             if spouse_aware_of_transaction == "Yes":
                 spouse_agrees_with_transaction = st.radio("Does he/she agree with this transaction?", ["Yes", "No"], key="spouse_agrees_with_transaction")
-                
+        
                 if spouse_agrees_with_transaction == "No":
-                    spouse_disagreement_reason = st.text_area("Please explain why your spouse disagrees:", key="spouse_disagreement_reason")      
+                    spouse_disagreement_reason = st.text_area("Please explain why your spouse disagrees:", key="spouse_disagreement_reason")
+
+            else:
+                # NEW: Explanation if spouse is unaware
+                spouse_unaware_reason = st.text_area("Please explain why your spouse is not aware of this transaction:", key="spouse_unaware_reason")
                     
         has_minor_children = st.radio("Minor children:", ["Yes", "No"], key="has_minor_children")
         if has_minor_children == "Yes":
