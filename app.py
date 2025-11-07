@@ -1077,21 +1077,14 @@ Monthly debt payment: ${debt_monthly_payment:,.2f}
                 
                 full_document += f"""
 MONTHLY EXPENSES
-Food/Groceries: ${expense_food:,.2f}
-Utilities: ${expense_utilities:,.2f}
-Bills/Insurance: ${expense_bills:,.2f}
-Entertainment: ${expense_entertainment:,.2f}
-Other: ${expense_other:,.2f}
+Expense Tracking Strategy: {expense_strategy}
 Total Monthly Expenses: ${total_monthly_expenses:,.2f}
 
-Monthly Income (after tax): ${monthly_income_after_tax:,.2f}
-Net Savings: ${net_savings:,.2f}
+Ability to Provide for Needs: {can_provide_for_needs}
+Explanation of Ability to Provide for Needs: {provide_for_needs_explanation}
 
-Can provide for own needs: {can_provide_for_needs}
-"""
-                if can_provide_for_needs == "Yes":
-                    full_document += f"""Does save money: {does_save}
-Savings description: {savings_description}
+Ability to Save Money: {can_save_money}
+Savings Description: {savings_description}
 """
                 
                 full_document += f"""
