@@ -955,6 +955,7 @@ if check_password():
         
         contract_description = st.text_area("What is the contract for? (e.g., '200 monthly payments of $500 starting 1/1/2029...'):", key="contract_description")
         lump_sum_amount = st.number_input("Lump sum dollar amount payable to annuitant from factoring company ($):", min_value=0.0, value=0.0, step=100.0, format="%.2f", key="lump_sum_amount")
+        payments_life_contingent = st.radio("Are these payments life contingent (do they have a beneficiary to receive money if they die)?", ["Yes", "No"], key="payments_life_contingent")
         
         how_obtained_payments = st.text_area("How did you obtain these payments? (This is crucial for the report):", key="how_obtained_payments")
         
@@ -971,8 +972,6 @@ if check_password():
         sold_payments_previously = st.radio("Has annuitant sold any payments previously?", ["Yes", "No"], key="sold_payments_previously")
         if sold_payments_previously == "Yes":
             previous_sales_count = st.text_area("How many times? (they often give a range):", key="previous_sales_count")
-        
-        payments_life_contingent = st.radio("Are these payments life contingent (do they have a beneficiary to receive money if they die)?", ["Yes", "No"], key="payments_life_contingent")
         
         st.write("---")
         
