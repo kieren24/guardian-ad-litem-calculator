@@ -1099,7 +1099,7 @@ Monthly debt payment: ${debt_monthly_payment:,.2f}
                 if has_future_liabilities == "Yes":
                     full_document += f"Future liabilities description: {future_liabilities_desc}\n"
                 
-                full_document += f"""
+full_document += f"""
 MONTHLY EXPENSES
 Expense Tracking Strategy: {expense_strategy}
 Total Monthly Expenses: ${total_monthly_expenses:,.2f}
@@ -1116,8 +1116,7 @@ Explanation of Ability to Provide for Needs: {provide_for_needs_explanation}
 
 Ability to Save Money: {can_save_money}
 Savings Description: {savings_description}
-"""
-                
+"""                
                 full_document += f"""
 SETTLEMENT PAYMENTS
 Contract description: {contract_description}
