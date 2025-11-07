@@ -709,14 +709,14 @@ if check_password():
         if is_married == "Yes":
             living_with_spouse = st.radio("Living with spouse:", ["Yes", "No"], key="living_with_spouse")
             
-            # NEW CODE: Transaction Awareness Section (only appears if married)
-            aware_of_transaction = st.radio("Is your spouse aware of this transaction?", ["Yes", "No"], key="aware_of_transaction")
+            # NEW CODE: Transaction Awareness Section (only appears if married is Yes)
+            spouse_aware_of_transaction = st.radio("Is your spouse aware of this transaction?", ["Yes", "No"], key="spouse_aware_of_transaction")
             
-            if aware_of_transaction == "Yes":
-                agrees_with_transaction = st.radio("Does he/she agree with this transaction?", ["Yes", "No"], key="agrees_with_transaction")
+            if spouse_aware_of_transaction == "Yes":
+                spouse_agrees_with_transaction = st.radio("Does he/she agree with this transaction?", ["Yes", "No"], key="spouse_agrees_with_transaction")
                 
-                if agrees_with_transaction == "No":
-                    disagreement_reason = st.text_area("Please explain why he/she disagrees:", key="disagreement_reason")            
+                if spouse_agrees_with_transaction == "No":
+                    spouse_disagreement_reason = st.text_area("Please explain why your spouse disagrees:", key="spouse_disagreement_reason")      
                     
         has_minor_children = st.radio("Minor children:", ["Yes", "No"], key="has_minor_children")
         if has_minor_children == "Yes":
