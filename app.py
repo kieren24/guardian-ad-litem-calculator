@@ -1099,18 +1099,18 @@ Monthly debt payment: ${debt_monthly_payment:,.2f}
                 if has_future_liabilities == "Yes":
                     full_document += f"Future liabilities description: {future_liabilities_desc}\n"
                 
-full_document += f"""
+                full_document += f"""
 MONTHLY EXPENSES
 Expense Tracking Strategy: {expense_strategy}
 Total Monthly Expenses: ${total_monthly_expenses:,.2f}
 """
 
-if expense_strategy == "I don't know what my monthly expenses are":
-    full_document += f"""Financial Awareness: {financial_awareness}
+                if expense_strategy == "I don't know what my monthly expenses are":
+                    full_document += f"""Financial Awareness: {financial_awareness}
 Additional Financial Context: {additional_context}
 """
 
-full_document += f"""
+                full_document += f"""
 Ability to Provide for Needs: {can_provide_for_needs}
 Explanation of Ability to Provide for Needs: {provide_for_needs_explanation}
 
