@@ -807,34 +807,122 @@ if check_password():
         if has_future_liabilities == "Yes":
             future_liabilities_desc = st.text_area("Describe future liabilities:", key="future_liabilities_desc")
         
+        # st.write("**Monthly Expenses:**")
+        # col1, col2 = st.columns(2)
+        # with col1:
+        #     expense_food = st.number_input("Food/Groceries ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_food")
+        #     expense_utilities = st.number_input("Utilities ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_utilities")
+        #     expense_bills = st.number_input("Bills/Insurance ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_bills")
+        # with col2:
+        #     expense_entertainment = st.number_input("Entertainment ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_entertainment")
+        #     expense_other = st.number_input("Other ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_other")
+        
+        # total_monthly_expenses = expense_food + expense_utilities + expense_bills + expense_entertainment + expense_other
+        # st.write(f"**Total Monthly Expenses: ${total_monthly_expenses:,.2f}**")
+        
+        # # Calculate monthly income and net savings
+        # monthly_income_after_tax = 0
+        # if is_employed == "Yes" and 'annual_salary' in st.session_state:
+        #     monthly_income_after_tax = (st.session_state['annual_salary'] / 12) * 0.85
+        
+        # net_savings = monthly_income_after_tax - total_monthly_expenses
+        
+        # st.write(f"**Monthly Income (after 85% tax adjustment): ${monthly_income_after_tax:,.2f}**")
+        # st.write(f"**Net Savings: ${net_savings:,.2f}**")
+        
+        # can_provide_for_needs = st.radio("Can you provide for your own needs on a monthly basis?", ["Yes", "No"], key="can_provide_for_needs")
+        # if can_provide_for_needs == "Yes":
+        #     st.write(f"There is roughly ${net_savings:,.2f} left over after expenses.")
+        #     does_save = st.radio("Do you save any of it?", ["Yes", "No"], key="does_save")
+        #     savings_description = st.text_area("Describe what they said about savings:", key="savings_description")
+        
         st.write("**Monthly Expenses:**")
-        col1, col2 = st.columns(2)
-        with col1:
-            expense_food = st.number_input("Food/Groceries ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_food")
-            expense_utilities = st.number_input("Utilities ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_utilities")
-            expense_bills = st.number_input("Bills/Insurance ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_bills")
-        with col2:
-            expense_entertainment = st.number_input("Entertainment ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_entertainment")
-            expense_other = st.number_input("Other ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_other")
+        # Expense Strategy Selection
+        expense_strategy = st.radio("How would you describe your monthly expenses?", [
+            "I track my expenses fairly carefully",
+            "I have a rough idea of my spending",
+            "I don't know what my monthly expenses are"
+        ])
         
-        total_monthly_expenses = expense_food + expense_utilities + expense_bills + expense_entertainment + expense_other
-        st.write(f"**Total Monthly Expenses: ${total_monthly_expenses:,.2f}**")
+        # Expense Tracking Based on Strategy
+        if expense_strategy == "I track my expenses fairly carefully":
+            total_monthly_expenses = st.number_input(
+                "What is your total monthly expenses?", 
+                min_value=0.0, 
+                value=0.0, 
+                step=100.0, 
+                format="%.2f"
+            )
         
-        # Calculate monthly income and net savings
+        elif expense_strategy == "I have a rough idea of my spending":
+            expense_ranges = [
+                "Less than $500",
+                "$500 - $1,000",
+                "$1,000 - $1,500",
+                "$1,500 - $2,000",
+                "$2,000 - $2,500",
+                "$2,500 - $3,000",
+                "More than $3,000"
+            ]
+            
+            expense_range = st.selectbox(
+                "Which range is closest to your monthly spending?", 
+                expense_ranges
+            )
+            
+            # Convert range to a midpoint estimate
+            expense_range_mapping = {
+                "Less than $500": 250,
+                "$500 - $1,000": 750,
+                "$1,000 - $1,500": 1250,
+                "$1,500 - $2,000": 1750,
+                "$2,000 - $3,000": 2500,
+                "More than $3,000": 3500
+            }
+            total_monthly_expenses = expense_range_mapping[expense_range]
+        
+        # Calculate monthly income
         monthly_income_after_tax = 0
         if is_employed == "Yes" and 'annual_salary' in st.session_state:
             monthly_income_after_tax = (st.session_state['annual_salary'] / 12) * 0.85
         
+        # Calculate net savings
         net_savings = monthly_income_after_tax - total_monthly_expenses
         
-        st.write(f"**Monthly Income (after 85% tax adjustment): ${monthly_income_after_tax:,.2f}**")
-        st.write(f"**Net Savings: ${net_savings:,.2f}**")
-        
-        can_provide_for_needs = st.radio("Can you provide for your own needs on a monthly basis?", ["Yes", "No"], key="can_provide_for_needs")
+        # Can provide for own needs
+        can_provide_for_needs = st.radio(
+            "Can you provide for your own needs on a monthly basis?", 
+            ["Yes", "No"], 
+            key="can_provide_for_needs"
+        )
         if can_provide_for_needs == "Yes":
-            st.write(f"There is roughly ${net_savings:,.2f} left over after expenses.")
-            does_save = st.radio("Do you save any of it?", ["Yes", "No"], key="does_save")
-            savings_description = st.text_area("Describe what they said about savings:", key="savings_description")
+            provide_for_needs_explanation = st.text_area(
+                "Please explain how you are able to provide for your needs:", 
+                key="provide_for_needs_explanation"
+            )
+        else:
+            provide_for_needs_explanation = st.text_area(
+                "Please explain why you are unable to provide for your needs:", 
+                key="provide_for_needs_explanation"
+            )
+        
+        # Ability to save money
+        can_save_money = st.radio(
+            "Are you able to save any money at the end of each month?", 
+            ["Yes", "No"], 
+            key="can_save_money"
+        )
+        if can_save_money == "Yes":
+            savings_description = st.text_area(
+                "Please describe how you save money and how much you typically save:", 
+                key="savings_description"
+            )
+        else:
+            savings_description = st.text_area(
+                "Please explain why you are unable to save money:", 
+                key="savings_description"
+            )
+
         
         st.write("---")
         
