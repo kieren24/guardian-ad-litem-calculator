@@ -913,6 +913,16 @@ Married: {is_married}
 """
                 if is_married == "Yes":
                     full_document += f"Living with spouse: {living_with_spouse}\n"
+                    full_document += f"Spouse aware of transaction: {spouse_aware_of_transaction}\n"
+    
+                    if spouse_aware_of_transaction == "Yes":
+                        full_document += f"Spouse agrees with transaction: {spouse_agrees_with_transaction}\n"
+        
+                        if spouse_agrees_with_transaction == "No":
+                            full_document += f"Reason for spouse's disagreement: {spouse_disagreement_reason}\n"
+    
+                    else:  # Spouse is not aware of transaction
+                        full_document += f"Reason spouse is unaware: {spouse_unaware_reason}\n"
                 
                 full_document += f"Minor children: {has_minor_children}\n"
                 if has_minor_children == "Yes":
