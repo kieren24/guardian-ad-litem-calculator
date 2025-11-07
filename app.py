@@ -953,8 +953,8 @@ if check_password():
         # Settlement Payments
         st.subheader("Settlement Payments")
         
-        how_obtained_payments = st.text_area("How did you obtain these payments? (This is crucial for the report):", key="how_obtained_payments")
-        initial_payment_details = st.text_area("Initial Amount of Payments (monthly or lump-sum? any aged out? what payments remaining and for how much?):", key="initial_payment_details")
+        how_obtained_payments = st.text_area("How did you originally obtain these payments? (Injury/Accident?):", key="how_obtained_payments")
+        
         was_injured = st.radio("Was annuitant injured?", ["Yes", "No"], key="was_injured")
         if was_injured == "Yes":
             had_brain_damage = st.radio("Did they have any head or brain damage?", ["Yes", "No"], key="had_brain_damage")
@@ -963,6 +963,7 @@ if check_password():
             has_guardianship = st.radio("Do they have existing guardianship?", ["Yes", "No"], key="has_guardianship")
             mental_faculties_assessment = st.text_area("Your assessment of their mental faculties:", key="mental_faculties_assessment")
         
+        initial_payment_details = st.text_area("Initial Amount of Payments (monthly or lump-sum? any aged out? what payments remaining and for how much?):", key="initial_payment_details")
         sold_payments_previously = st.radio("Has annuitant sold any payments previously?", ["Yes", "No"], key="sold_payments_previously")
         if sold_payments_previously == "Yes":
             previous_sales_count = st.text_area("How many times? (they often give a range):", key="previous_sales_count")
