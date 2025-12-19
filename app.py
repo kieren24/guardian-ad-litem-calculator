@@ -664,7 +664,7 @@ if check_password():
       Lower Bound ({lower_bound}Y): {lower_rate:.4f} ({lower_rate:.2%})
       Upper Bound ({upper_bound}Y): {upper_rate:.4f} ({upper_rate:.2%})
     
-    Excel Discount Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
+    Wholesale Rate: {excel_discount_rate:.4f} ({excel_discount_rate:.2%})
     (Formula: ((Duration-{lower_bound})/({upper_bound}-{lower_bound})*({upper_rate:.4f}-{lower_rate:.4f}))+{lower_rate:.4f}+{spread:.3f})
     
     Spread Used: {spread:.1%}
