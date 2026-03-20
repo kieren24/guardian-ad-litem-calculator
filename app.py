@@ -788,173 +788,151 @@ if check_password():
             st.write(f"**Annualized Salary: ${annual_salary:,.2f}**")
             st.session_state['annual_salary'] = annual_salary
         
-        has_other_income = st.radio("Other income sources (renting, side hustle, etc.):", ["Yes", "No"], key="has_other_income")
-        if has_other_income == "Yes":
-            other_income_desc = st.text_area("Describe other income sources:", key="other_income_desc")
-        
-        has_assets = st.radio("Available Assets (home, land, cars, jewelry, stocks, bonds, etc.):", ["Yes", "No"], key="has_assets")
+        # ── SECTION: Monthly Income ───────────────────────────────────────
+        st.write("---")
+        st.subheader("💵 Monthly Income")
+
+        # Employment income derived from salary entered above
+        if is_employed == "Yes":
+            monthly_employment_income = st.session_state.get('annual_salary', 0.0) / 12
+            st.write(f"**Employment income: ${monthly_employment_income:,.2f}/month** (from ${st.session_state.get('annual_salary', 0.0):,.2f} annual salary)")
+        else:
+            monthly_employment_income = 0.0
+            st.write("**Employment income: $0.00/month** (not employed)")
+
+        has_gov_benefits = st.radio("Does the client receive government benefits (SSI, disability, Social Security, VA)?", ["No", "Yes"], key="has_gov_benefits")
+        gov_benefits = 0.0
+        if has_gov_benefits == "Yes":
+            gov_benefits = st.number_input("Government benefits (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="gov_benefits_amount")
+
+        has_child_support_received = st.radio("Does the client receive child support or alimony?", ["No", "Yes"], key="has_child_support_received")
+        child_support_received = 0.0
+        if has_child_support_received == "Yes":
+            child_support_received = st.number_input("Child support or alimony received (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="child_support_received_amount")
+
+        has_rental_income = st.radio("Does the client have rental or other regular income?", ["No", "Yes"], key="has_rental_income")
+        rental_income = 0.0
+        if has_rental_income == "Yes":
+            rental_income = st.number_input("Rental or other regular income (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="rental_income_amount")
+
+        total_monthly_income = monthly_employment_income + gov_benefits + child_support_received + rental_income
+        st.success(f"**Total Monthly Income: ${total_monthly_income:,.2f}**")
+
+        # ── SECTION: Monthly Fixed Obligations ───────────────────────────
+        st.write("---")
+        st.subheader("🏠 Monthly Fixed Obligations")
+        st.caption("These are required monthly payments, not including living expenses.")
+
+        # Housing payment flows in from Living Arrangements above
+        if rent_or_own == "Rent":
+            housing_payment = st.session_state.get("monthly_rent", 0.0)
+            st.write(f"**Rent: ${housing_payment:,.2f}/month** (entered above)")
+        elif rent_or_own == "Own":
+            if st.session_state.get("has_mortgage", "No") == "Yes":
+                housing_payment = st.session_state.get("monthly_mortgage", 0.0)
+                st.write(f"**Mortgage: ${housing_payment:,.2f}/month** (entered above)")
+            else:
+                housing_payment = 0.0
+                st.write("**Mortgage: $0.00/month** (owns home, no mortgage)")
+        else:
+            housing_payment = 0.0
+
+        has_car_payment = st.radio("Does the client have car payment(s)?", ["No", "Yes"], key="has_car_payment")
+        car_payment = 0.0
+        if has_car_payment == "Yes":
+            car_payment = st.number_input("Car payment(s) (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="car_payment_amount")
+
+        has_child_support_paid = st.radio("Does the client pay child support or alimony?", ["No", "Yes"], key="has_child_support_paid")
+        child_support_paid = 0.0
+        if has_child_support_paid == "Yes":
+            child_support_paid = st.number_input("Child support or alimony paid (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="child_support_paid_amount")
+
+        has_student_loans = st.radio("Does the client have student loan payments?", ["No", "Yes"], key="has_student_loans")
+        student_loans = 0.0
+        if has_student_loans == "Yes":
+            student_loans = st.number_input("Student loan payments (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="student_loans_amount")
+
+        has_credit_cards = st.radio("Does the client have credit card minimum payments?", ["No", "Yes"], key="has_credit_cards")
+        credit_cards = 0.0
+        if has_credit_cards == "Yes":
+            credit_cards = st.number_input("Credit card minimum payments (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="credit_cards_amount")
+
+        has_medical_bills = st.radio("Does the client have medical bills on a payment plan?", ["No", "Yes"], key="has_medical_bills")
+        medical_bills = 0.0
+        if has_medical_bills == "Yes":
+            medical_bills = st.number_input("Medical bill payments (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="medical_bills_amount")
+
+        has_other_fixed = st.radio("Does the client have other fixed monthly payments?", ["No", "Yes"], key="has_other_fixed")
+        other_fixed = 0.0
+        other_fixed_desc = ""
+        if has_other_fixed == "Yes":
+            other_fixed_desc = st.text_input("Describe the other fixed payment(s):", key="other_fixed_desc")
+            other_fixed = st.number_input("Other fixed payments (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="other_fixed_amount")
+
+        total_fixed_obligations = housing_payment + car_payment + child_support_paid + student_loans + credit_cards + medical_bills + other_fixed
+        st.success(f"**Total Monthly Fixed Obligations: ${total_fixed_obligations:,.2f}**")
+
+        # ── SECTION: Monthly Living Expenses ─────────────────────────────
+        st.write("---")
+        st.subheader("🛒 Monthly Living Expenses")
+        st.caption("Approximate monthly spending, not including the fixed obligations above.")
+
+        expense_food = st.number_input("Food & groceries (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_food")
+        expense_utilities = st.number_input("Utilities — electric, water, phone (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_utilities")
+        expense_transportation = st.number_input("Transportation — gas, car insurance (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_transportation")
+        expense_health = st.number_input("Health insurance & medical costs (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_health")
+        expense_other = st.number_input("Everything else (per month):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_other")
+
+        total_living_expenses = expense_food + expense_utilities + expense_transportation + expense_health + expense_other
+        st.success(f"**Total Monthly Living Expenses: ${total_living_expenses:,.2f}**")
+
+        # ── SECTION: Assets & Total Debt ─────────────────────────────────
+        st.write("---")
+        st.subheader("🏦 Assets & Total Debt")
+        st.caption("One-time snapshot — not monthly amounts.")
+
+        has_assets = st.radio("Does the client have any significant assets (property, vehicles, savings, investments, etc.)?", ["No", "Yes"], key="has_assets")
+        assets_total = 0.0
+        assets_description = ""
         if has_assets == "Yes":
-            assets_description = st.text_area("Describe assets:", key="assets_description")
-            assets_total = st.number_input("Total value of assets ($):", min_value=0.0, value=0.0, step=1000.0, format="%.2f", key="assets_total")
-        
-        has_debt = st.radio("Debt obligations (mortgage, credit cards, auto loans, student loans, etc.):", ["Yes", "No"], key="has_debt")
-        if has_debt == "Yes":
-            debt_description = st.text_area("Describe debt obligations:", key="debt_description")
-            debt_total = st.number_input("Total debt amount ($):", min_value=0.0, value=0.0, step=1000.0, format="%.2f", key="debt_total")
-            debt_monthly_payment = st.number_input("Average monthly payment on all debts ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="debt_monthly_payment")
-        
+            assets_description = st.text_area("Describe assets (include home equity, vehicle values, savings, etc.):", key="assets_description")
+            assets_total = st.number_input("Total estimated value of all assets ($):", min_value=0.0, value=0.0, step=1000.0, format="%.2f", key="assets_total")
+
+        total_debt_balance = st.number_input("Total outstanding debt balance across all sources ($):", min_value=0.0, value=0.0, step=1000.0, format="%.2f", key="total_debt_balance")
+
         has_future_liabilities = st.radio("Future liabilities (any upcoming large expenses you know of):", ["Yes", "No"], key="has_future_liabilities")
+        future_liabilities_desc = ""
         if has_future_liabilities == "Yes":
             future_liabilities_desc = st.text_area("Describe future liabilities:", key="future_liabilities_desc")
-        
-        # st.write("**Monthly Expenses:**")
-        # col1, col2 = st.columns(2)
-        # with col1:
-        #     expense_food = st.number_input("Food/Groceries ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_food")
-        #     expense_utilities = st.number_input("Utilities ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_utilities")
-        #     expense_bills = st.number_input("Bills/Insurance ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_bills")
-        # with col2:
-        #     expense_entertainment = st.number_input("Entertainment ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_entertainment")
-        #     expense_other = st.number_input("Other ($):", min_value=0.0, value=0.0, step=50.0, format="%.2f", key="expense_other")
-        
-        # total_monthly_expenses = expense_food + expense_utilities + expense_bills + expense_entertainment + expense_other
-        # st.write(f"**Total Monthly Expenses: ${total_monthly_expenses:,.2f}**")
-        
-        # # Calculate monthly income and net savings
-        # monthly_income_after_tax = 0
-        # if is_employed == "Yes" and 'annual_salary' in st.session_state:
-        #     monthly_income_after_tax = (st.session_state['annual_salary'] / 12) * 0.85
-        
-        # net_savings = monthly_income_after_tax - total_monthly_expenses
-        
-        # st.write(f"**Monthly Income (after 85% tax adjustment): ${monthly_income_after_tax:,.2f}**")
-        # st.write(f"**Net Savings: ${net_savings:,.2f}**")
-        
-        # can_provide_for_needs = st.radio("Can you provide for your own needs on a monthly basis?", ["Yes", "No"], key="can_provide_for_needs")
-        # if can_provide_for_needs == "Yes":
-        #     st.write(f"There is roughly ${net_savings:,.2f} left over after expenses.")
-        #     does_save = st.radio("Do you save any of it?", ["Yes", "No"], key="does_save")
-        #     savings_description = st.text_area("Describe what they said about savings:", key="savings_description")
-        
-        st.write("**Monthly Expenses:**")
-        # Expense Strategy Selection
-        expense_strategy = st.radio("How would you describe your monthly expenses?", [
-            "I track my expenses fairly carefully",
-            "I have a rough idea of my spending",
-            "I don't know what my monthly expenses are"
-        ])
-        
-        # Default total_monthly_expenses to 0
-        total_monthly_expenses = 0.0
-        
-        # Expense Tracking Based on Strategy
-        if expense_strategy == "I track my expenses fairly carefully":
-            total_monthly_expenses = st.number_input(
-                "What is your total monthly expenses?", 
-                min_value=0.0, 
-                value=0.0, 
-                step=100.0, 
-                format="%.2f"
-            )
-        
-        elif expense_strategy == "I have a rough idea of my spending":
-            expense_ranges = [
-                "Less than $500",
-                "$500 - $1,000",
-                "$1,000 - $1,500",
-                "$1,500 - $2,000",
-                "$2,000 - $2,500",
-                "$2,500 - $3,000",
-                "More than $3,000"
-            ]
-            
-            expense_range = st.selectbox(
-                "Which range is closest to your monthly spending?", 
-                expense_ranges
-            )
-            
-            # Convert range to a midpoint estimate
-            expense_range_mapping = {
-                "Less than $500": 250,
-                "$500 - $1,000": 750,
-                "$1,000 - $1,500": 1250,
-                "$1,500 - $2,000": 1750,
-                "$2,000 - $3,000": 2500,
-                "More than $3,000": 3500
-            }
-            total_monthly_expenses = expense_range_mapping[expense_range]
-        
-        elif expense_strategy == "I don't know what my monthly expenses are":
-            st.write("""
-            It appears the annuitant is unsure about their monthly expenses. 
-            This lack of financial awareness may be an important observation 
-            for the Guardian Ad Litem report.
-            """)
-            
-            financial_awareness = st.radio(
-                "What best describes their understanding of their financial situation?", 
-                [
-                    "Completely unaware of monthly expenses",
-                    "Can provide very rough estimates",
-                    "Seems confused about financial details"
-                ]
-            )
-            
-            additional_context = st.text_area(
-                "Provide additional context about the annuitant's financial awareness:", 
-                placeholder="Note observations about their ability to discuss finances, any apparent challenges, or other relevant details for the report."
-            )
-        
-        # Calculate monthly income
-        monthly_income_after_tax = 0
-        if is_employed == "Yes" and 'annual_salary' in st.session_state:
-            monthly_income_after_tax = (st.session_state['annual_salary'] / 12) * 0.85
-        
-        # Calculate net savings
-        net_savings = monthly_income_after_tax - total_monthly_expenses
-        
-        # Can provide for own needs
-        can_provide_for_needs = st.radio(
-            "Can you provide for your own needs on a monthly basis?", 
-            ["Yes", "No"], 
-            key="can_provide_for_needs"
-        )
-        if can_provide_for_needs == "Yes":
-            provide_for_needs_explanation = st.text_area(
-                "Please explain how you are able to provide for your needs:", 
-                key="provide_for_needs_explanation"
-            )
-        else:
-            provide_for_needs_explanation = st.text_area(
-                "Please explain why you are unable to provide for your needs:", 
-                key="provide_for_needs_explanation"
-            )
-        
-        # Ability to save money
-        can_save_money = st.radio(
-            "Are you able to save any money at the end of each month?", 
-            ["Yes", "No"], 
-            key="can_save_money"
-        )
-        if can_save_money == "Yes":
-            savings_description = st.text_area(
-                "Please describe how you save money and how much you typically save:", 
-                key="savings_description"
-            )
-        else:
-            savings_description = st.text_area(
-                "Please explain why you are unable to save money:", 
-                key="savings_description"
-            )
 
-        
+        # ── MONTHLY FINANCIAL SUMMARY BOX ────────────────────────────────
         st.write("---")
-        
+        st.subheader("📊 Monthly Financial Summary")
+
+        net_monthly = total_monthly_income - total_fixed_obligations - total_living_expenses
+        total_outflows = total_fixed_obligations + total_living_expenses
+        net_color = "green" if net_monthly >= 0 else "red"
+
+        st.markdown(f"""
+<div style="padding: 16px; border: 2px solid #ddd; border-radius: 8px; background-color: #f9f9f9; font-size: 15px; font-family: sans-serif;">
+  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>Total Monthly Income:</span><span><b>${total_monthly_income:,.2f}</b></span></div>
+  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>Less Fixed Obligations:</span><span>-${total_fixed_obligations:,.2f}</span></div>
+  <div style="display: flex; justify-content: space-between; margin-bottom: 10px;"><span>Less Living Expenses:</span><span>-${total_living_expenses:,.2f}</span></div>
+  <hr style="margin: 8px 0; border-color: #ccc;">
+  <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold; color: {net_color};"><span>Net Monthly Position:</span><span>${net_monthly:,.2f}</span></div>
+  <hr style="margin: 8px 0; border-color: #ccc;">
+  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><span>Total Assets:</span><span>${assets_total:,.2f}</span></div>
+  <div style="display: flex; justify-content: space-between;"><span>Total Debt Balance:</span><span>${total_debt_balance:,.2f}</span></div>
+</div>
+""", unsafe_allow_html=True)
+
+        st.write("---")
+
         # Settlement Payments
         st.subheader("Settlement Payments")
-        
+
         how_obtained_payments = st.text_area("How did you originally obtain these payments? (Injury/Accident?):", key="how_obtained_payments")
-        
+
         was_injured = st.radio("Was annuitant injured?", ["Yes", "No"], key="was_injured")
         if was_injured == "Yes":
             had_brain_damage = st.radio("Did they have any head or brain damage?", ["Yes", "No"], key="had_brain_damage")
@@ -962,59 +940,97 @@ if check_password():
                 recovery_level = st.text_area("What is their level of recovery?", key="recovery_level")
             has_guardianship = st.radio("Do they have existing guardianship?", ["Yes", "No"], key="has_guardianship")
             mental_faculties_assessment = st.text_area("Your assessment of their mental faculties:", key="mental_faculties_assessment")
-        
+
         initial_payment_details = st.text_area("Initial Amount of Payments (monthly or lump-sum? any aged out? what payments remaining and for how much?):", key="initial_payment_details")
         sold_payments_previously = st.radio("Has annuitant sold any payments previously?", ["Yes", "No"], key="sold_payments_previously")
         if sold_payments_previously == "Yes":
             previous_sales_count = st.text_area("How many times? (they often give a range):", key="previous_sales_count")
-                
+
         st.write("---")
-        
+
         # Purpose of the Sale
         st.subheader("Purpose of the Sale")
-        
+
         contract_description = st.text_area("What is the contract for? (e.g., '200 monthly payments of $500 starting 1/1/2029...'):", key="contract_description")
         lump_sum_amount = st.number_input("Lump sum dollar amount payable to annuitant from factoring company ($):", min_value=0.0, value=0.0, step=100.0, format="%.2f", key="lump_sum_amount")
         payments_life_contingent = st.radio("Are these payments life contingent (do they have a beneficiary to receive money if they die)?", ["Yes", "No"], key="payments_life_contingent")
-        
+
         rationale_for_sale = st.text_area("Rationale for selling payments:", key="rationale_for_sale")
-        
+
         pursued_other_financing = st.radio("Other means of financing pursued (bank, family, student loans, etc.):", ["Yes", "No"], key="pursued_other_financing")
         if pursued_other_financing == "Yes":
             other_financing_desc = st.text_area("Describe other financing attempts:", key="other_financing_desc")
-        
+
         what_if_not_approved = st.text_area("What happens if this sale is not approved?", key="what_if_not_approved")
-        
+
         st.write("---")
-        
+
         # Generate Summary Document
         st.subheader("📋 Generated Summary Document")
-        
+
         if st.button("Generate Summary Document", key="generate_summary_button"):
-            # Check if financial analysis is complete
-            if not st.session_state.get('financial_complete', False):
-                st.error("❌ Please complete the Financial Analysis tab first before generating the summary.")
+            # Build income description
+            income_parts = []
+            if monthly_employment_income > 0:
+                income_parts.append(f"${monthly_employment_income:,.2f} in employment wages")
+            if gov_benefits > 0:
+                income_parts.append(f"${gov_benefits:,.2f} in government benefits")
+            if child_support_received > 0:
+                income_parts.append(f"${child_support_received:,.2f} in child support received")
+            if rental_income > 0:
+                income_parts.append(f"${rental_income:,.2f} in other income")
+
+            if not income_parts:
+                income_description = "no reported income sources"
+            elif len(income_parts) == 1:
+                income_description = income_parts[0]
+            elif len(income_parts) == 2:
+                income_description = f"{income_parts[0]} and {income_parts[1]}"
             else:
-                # Get financial data from session state
-                purchase_price = st.session_state.get('purchase_price', 0)
-                irr_rate = st.session_state.get('irr_rate', 0)
-                lindsey_quote = st.session_state.get('lindsey_quote', 0)
-                lindsey_irr = st.session_state.get('lindsey_irr', 0)
-                wholesale_price = st.session_state.get('wholesale_price', 0)
-                excel_discount_rate = st.session_state.get('excel_discount_rate', 0)
-                profit = st.session_state.get('profit', 0)
-                competitor_quote = st.session_state.get('competitor_quote', 0)
-                competitive_irr = st.session_state.get('competitive_irr', 0)
-                competitor_profit = st.session_state.get('competitor_profit', 0)
-                
-                # Generate the summary paragraph
-                summary_paragraph = f"""Payee is seeking to sell {contract_description} in exchange for ${purchase_price:,.2f}. The discount rate on the proposed purchase price is {irr_rate:.2%} with a duration of {duration_years:.1f} years. The price of an annuity today is ${lindsey_quote:,.2f} with an IRR of {lindsey_irr:.2%}. The wholesale market price of this payment stream is ${wholesale_price:,.2f} and the wholesale rate is {excel_discount_rate:.2%}. That means the factoring company would be making ${profit:,.2f} (${wholesale_price:,.2f} - $6,000 - ${purchase_price:,.2f}). The estimated fair market value is ${competitor_quote:,.2f} with a discount rate of {competitive_irr:.2%}, meaning the profit from a fair market offer would be ${competitor_profit:,.2f}."""
-                
-                # Display the full summary document
-                st.success("✅ Summary document generated!")
-                
-                full_document = f"""
-CLIENT PHONE CALL SUMMARY
+                income_description = ", ".join(income_parts[:-1]) + f", and {income_parts[-1]}"
+
+            # Build fixed obligations description
+            fixed_parts = []
+            if housing_payment > 0:
+                housing_label = "rent" if rent_or_own == "Rent" else "mortgage"
+                fixed_parts.append(f"{housing_label} of ${housing_payment:,.2f}")
+            if car_payment > 0:
+                fixed_parts.append(f"car payment of ${car_payment:,.2f}")
+            if child_support_paid > 0:
+                fixed_parts.append(f"child support or alimony of ${child_support_paid:,.2f}")
+            if student_loans > 0:
+                fixed_parts.append(f"student loans of ${student_loans:,.2f}")
+            if credit_cards > 0:
+                fixed_parts.append(f"credit card minimums of ${credit_cards:,.2f}")
+            if medical_bills > 0:
+                fixed_parts.append(f"medical bill payments of ${medical_bills:,.2f}")
+            if other_fixed > 0:
+                desc_suffix = f" ({other_fixed_desc})" if other_fixed_desc.strip() else ""
+                fixed_parts.append(f"other fixed payments of ${other_fixed:,.2f}{desc_suffix}")
+
+            if not fixed_parts:
+                fixed_description = "no reported fixed obligations"
+            elif len(fixed_parts) == 1:
+                fixed_description = fixed_parts[0]
+            elif len(fixed_parts) == 2:
+                fixed_description = f"{fixed_parts[0]} and {fixed_parts[1]}"
+            else:
+                fixed_description = ", ".join(fixed_parts[:-1]) + f", and {fixed_parts[-1]}"
+
+            net_abs = abs(net_monthly)
+            net_label = "discretionary income" if net_monthly >= 0 else "shortfall"
+
+            financial_summary_paragraph = (
+                f"Payee reports monthly income of approximately ${total_monthly_income:,.2f}, consisting of {income_description}. "
+                f"Payee's fixed monthly obligations total approximately ${total_fixed_obligations:,.2f}, including {fixed_description}. "
+                f"Payee estimates an additional ${total_living_expenses:,.2f} per month in living expenses for food, utilities, and transportation, "
+                f"bringing total monthly outflows to approximately ${total_outflows:,.2f}. "
+                f"This leaves approximately ${net_abs:,.2f} per month in {net_label}. "
+                f"Payee reports total assets of approximately ${assets_total:,.2f} and total outstanding debt of approximately ${total_debt_balance:,.2f}."
+            )
+
+            # Build full document
+            full_document = f"""CLIENT PHONE CALL SUMMARY
 
 CALL INFORMATION
 Age: {client_age}
@@ -1022,147 +1038,99 @@ Age: {client_age}
 ANNUITANT LIVING ARRANGEMENTS
 Married: {is_married}
 """
-                if is_married == "Yes":
-                    full_document += f"Living with spouse: {living_with_spouse}\n"
-                    full_document += f"Spouse aware of transaction: {spouse_aware_of_transaction}\n"
-    
-                    if spouse_aware_of_transaction == "Yes":
-                        full_document += f"Spouse agrees with transaction: {spouse_agrees_with_transaction}\n"
-        
-                        if spouse_agrees_with_transaction == "No":
-                            full_document += f"Reason for spouse's disagreement: {spouse_disagreement_reason}\n"
-    
-                    else:  # Spouse is not aware of transaction
-                        full_document += f"Reason spouse is unaware: {spouse_unaware_reason}\n"
-                
-                full_document += f"Minor children: {has_minor_children}\n"
-                if has_minor_children == "Yes":
-                    full_document += f"Number of children: {num_children}\n"
-                    for i in range(num_children):
-                        child_age = st.session_state.get(f"child_{i}_age", 0)
-                        full_document += f"  Child {i+1} age: {child_age}\n"
-                
-                full_document += f"Other dependents: {has_other_dependents}\n"
-                if has_other_dependents == "Yes":
-                    full_document += f"Other dependents description: {other_dependents_desc}\n"
-                
-                full_document += f"""Housing situation: {housing_situation}
-Housing description: {housing_description}
-Rent or Own: {rent_or_own}
-"""
-                if rent_or_own == "Rent":
-                    full_document += f"Monthly Rent: ${monthly_rent:,.2f}\n"
-                elif rent_or_own == "Own":
-                    full_document += f"Has mortgage: {has_mortgage}\n"
-                    if has_mortgage == "Yes":
-                        full_document += f"Monthly Mortgage: ${monthly_mortgage:,.2f}\n"
-                
-                full_document += f"""
-ANNUITANT'S FINANCIAL SITUATION OUTSIDE OF SETTLEMENT
-Education background: {education}
-"""
-                if education == "Some college":
-                    full_document += f"Years of college: {college_years}\n"
-                elif education in ["Certificate", "Associates degree", "Bachelors degree", "Graduate degree"]:
-                    full_document += f"Field/Subject: {degree_field}\n"
-                
-                full_document += f"""Employed: {is_employed}
-Employment description: {employment_description}
-"""
-                if is_employed == "Yes":
-                    full_document += f"""Employment type: {employment_type}
-Salary period: {salary_period}
-Salary amount: ${salary_amount:,.2f}
-Annualized Salary: ${annual_salary:,.2f}
-"""
-                
-                full_document += f"Other income sources: {has_other_income}\n"
-                if has_other_income == "Yes":
-                    full_document += f"Other income description: {other_income_desc}\n"
-                
-                full_document += f"Available Assets: {has_assets}\n"
-                if has_assets == "Yes":
-                    full_document += f"""Assets description: {assets_description}
-Total assets: ${assets_total:,.2f}
-"""
-                
-                full_document += f"Debt obligations: {has_debt}\n"
-                if has_debt == "Yes":
-                    full_document += f"""Debt description: {debt_description}
-Total debt: ${debt_total:,.2f}
-Monthly debt payment: ${debt_monthly_payment:,.2f}
-"""
-                
-                full_document += f"Future liabilities: {has_future_liabilities}\n"
-                if has_future_liabilities == "Yes":
-                    full_document += f"Future liabilities description: {future_liabilities_desc}\n"
-                
-                full_document += f"""
-MONTHLY EXPENSES
-Expense Tracking Strategy: {expense_strategy}
-Total Monthly Expenses: ${total_monthly_expenses:,.2f}
-"""
+            if is_married == "Yes":
+                full_document += f"Living with spouse: {living_with_spouse}\n"
+                full_document += f"Spouse aware of transaction: {spouse_aware_of_transaction}\n"
+                if spouse_aware_of_transaction == "Yes":
+                    full_document += f"Spouse agrees with transaction: {spouse_agrees_with_transaction}\n"
+                    if spouse_agrees_with_transaction == "No":
+                        full_document += f"Reason for spouse's disagreement: {spouse_disagreement_reason}\n"
+                else:
+                    full_document += f"Reason spouse is unaware: {spouse_unaware_reason}\n"
 
-                if expense_strategy == "I don't know what my monthly expenses are":
-                    full_document += f"""Financial Awareness: {financial_awareness}
-Additional Financial Context: {additional_context}
+            full_document += f"Minor children: {has_minor_children}\n"
+            if has_minor_children == "Yes":
+                full_document += f"Number of children: {num_children}\n"
+                for i in range(num_children):
+                    child_age_val = st.session_state.get(f"child_{i}_age", 0)
+                    full_document += f"  Child {i+1} age: {child_age_val}\n"
+
+            full_document += f"Other dependents: {has_other_dependents}\n"
+            if has_other_dependents == "Yes":
+                full_document += f"Other dependents description: {other_dependents_desc}\n"
+
+            full_document += f"Housing situation: {housing_situation}\n"
+            full_document += f"Housing description: {housing_description}\n"
+            full_document += f"Rent or Own: {rent_or_own}\n"
+            if rent_or_own == "Rent":
+                full_document += f"Monthly Rent: ${st.session_state.get('monthly_rent', 0.0):,.2f}\n"
+            elif rent_or_own == "Own":
+                full_document += f"Has mortgage: {st.session_state.get('has_mortgage', 'No')}\n"
+                if st.session_state.get("has_mortgage") == "Yes":
+                    full_document += f"Monthly Mortgage: ${st.session_state.get('monthly_mortgage', 0.0):,.2f}\n"
+
+            full_document += f"\nANNUITANT'S FINANCIAL SITUATION\n"
+            full_document += f"Education: {education}\n"
+            if education == "Some college":
+                full_document += f"Years of college: {college_years}\n"
+            elif education in ["Certificate", "Associates degree", "Bachelors degree", "Graduate degree"]:
+                full_document += f"Field/Subject: {degree_field}\n"
+            full_document += f"Employed: {is_employed}\n"
+            full_document += f"Employment description: {employment_description}\n"
+            if is_employed == "Yes":
+                full_document += f"Employment type: {employment_type}\n"
+                full_document += f"Salary: ${salary_amount:,.2f} ({salary_period}) / ${annual_salary:,.2f} annualized\n"
+
+            full_document += f"""
+MONTHLY FINANCIAL SUMMARY
+{financial_summary_paragraph}
+
+Assets: {has_assets}
 """
+            if has_assets == "Yes":
+                full_document += f"Assets description: {assets_description}\n"
+                full_document += f"Total assets: ${assets_total:,.2f}\n"
+            full_document += f"Total outstanding debt: ${total_debt_balance:,.2f}\n"
+            full_document += f"Future liabilities: {has_future_liabilities}\n"
+            if has_future_liabilities == "Yes":
+                full_document += f"Future liabilities description: {future_liabilities_desc}\n"
 
-                full_document += f"""
-Ability to Provide for Needs: {can_provide_for_needs}
-Explanation of Ability to Provide for Needs: {provide_for_needs_explanation}
-
-Ability to Save Money: {can_save_money}
-Savings Description: {savings_description}
-"""                
-                full_document += f"""
+            full_document += f"""
 SETTLEMENT PAYMENTS
 Contract description: {contract_description}
-Lump sum amount from factoring company: ${lump_sum_amount:,.2f}
+Lump sum from factoring company: ${lump_sum_amount:,.2f}
 How payments were obtained: {how_obtained_payments}
-
 Was injured: {was_injured}
 """
-                if was_injured == "Yes":
-                    full_document += f"Had brain damage: {had_brain_damage}\n"
-                    if had_brain_damage == "Yes":
-                        full_document += f"Recovery level: {recovery_level}\n"
-                    full_document += f"""Has guardianship: {has_guardianship}
-Mental faculties assessment: {mental_faculties_assessment}
-"""
-                
-                full_document += f"""Initial payment details: {initial_payment_details}
-Sold payments previously: {sold_payments_previously}
-"""
-                if sold_payments_previously == "Yes":
-                    full_document += f"Number of previous sales: {previous_sales_count}\n"
-                
-                full_document += f"""Payments life contingent: {payments_life_contingent}
+            if was_injured == "Yes":
+                full_document += f"Had brain damage: {had_brain_damage}\n"
+                if had_brain_damage == "Yes":
+                    full_document += f"Recovery level: {recovery_level}\n"
+                full_document += f"Has guardianship: {has_guardianship}\n"
+                full_document += f"Mental faculties assessment: {mental_faculties_assessment}\n"
 
+            full_document += f"Initial payment details: {initial_payment_details}\n"
+            full_document += f"Sold payments previously: {sold_payments_previously}\n"
+            if sold_payments_previously == "Yes":
+                full_document += f"Number of previous sales: {previous_sales_count}\n"
+            full_document += f"Payments life contingent: {payments_life_contingent}\n"
+
+            full_document += f"""
 PURPOSE OF THE SALE
 Rationale for selling: {rationale_for_sale}
 Pursued other financing: {pursued_other_financing}
 """
-                if pursued_other_financing == "Yes":
-                    full_document += f"Other financing description: {other_financing_desc}\n"
-                
-                full_document += f"""What if not approved: {what_if_not_approved}
+            if pursued_other_financing == "Yes":
+                full_document += f"Other financing description: {other_financing_desc}\n"
+            full_document += f"What if not approved: {what_if_not_approved}\n"
 
----
+            st.success("✅ Summary document generated!")
+            st.text_area("Complete Summary Document", full_document, height=400, key="complete_summary_output")
 
-FINANCIAL ANALYSIS SUMMARY
+            st.session_state['client_call_complete'] = True
+            st.session_state['summary_document'] = full_document
+            st.session_state['financial_summary_paragraph'] = financial_summary_paragraph
 
-{summary_paragraph}
-"""
-                
-                # Display in a text area for easy copying
-                st.text_area("Complete Summary Document", full_document, height=400, key="complete_summary_output")
-                
-                # Store for use in report generation
-                st.session_state['client_call_complete'] = True
-                st.session_state['summary_document'] = full_document
-                st.session_state['summary_paragraph'] = summary_paragraph
-        
         st.write("---")
         st.write("### ✅ Client Phone Call Complete!")
         st.write("Ready to create your Guardian Ad Litem report? Click the **📝 Report Creation** tab above to continue.")
